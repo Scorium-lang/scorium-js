@@ -1,6 +1,6 @@
 {
   "name": "scorium",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "Native TypeScript implementation of the Scorium configuration language",
   "type": "module",
   "author": "fi3w0",

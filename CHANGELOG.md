@@ -9,6 +9,13 @@ versions.
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-08-30
+
+### Fixed
+- `SCORIUM_LANGUAGE_VERSION` reported `"0.2.0-draft"`, stale since the
+  language version was promoted to stable `0.2.0` earlier. Found while
+  researching `scorium-js` as a porting template for `scorium-go`.
+
 ## [0.9.3] - 2026-08-30
 
 ### Added
