@@ -1,0 +1,7 @@
+{
+  "name": "duration arithmetic is not defined",
+  "source": "bad = 1s + 1s",
+  "expect_error": {
+    "code": "scorium::eval::type_error"
+  }
+}

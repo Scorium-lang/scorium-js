@@ -1,0 +1,7 @@
+{
+  "name": "return outside a function is rejected",
+  "source": "return 1",
+  "expect_error": {
+    "code": "scorium::eval::return_outside_function"
+  }
+}

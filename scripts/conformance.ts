@@ -14,7 +14,7 @@ import { decodeEntries, entriesEqual } from "../src/fixture-codec.ts";
 // to check out yet. Point SCORIUM_SPEC_FIXTURES at a live sibling
 // checkout's conformance/<version>/ directory when iterating on
 // scorium-spec itself.
-const SPEC_ROOT = process.env.SCORIUM_SPEC_FIXTURES ?? join(import.meta.dirname, "..", "fixtures", "v0.2.0-draft");
+const SPEC_ROOT = process.env.SCORIUM_SPEC_FIXTURES ?? join(import.meta.dirname, "..", "fixtures", "v0.2.0");
 const CATEGORIES = ["values", "evaluation", "diagnostics", "sandbox"];
 
 let pass = 0;
@@ -22,8 +22,18 @@ let fail = 0;
 
 /** Runs a fixture's `source`, or its `files`+`entry` (written to a scratch dir so `include` has real files to read), returning the evaluated entries. */
 function runFixture(fixture: any): Entry[] {
+  const sandbox = fixture.options
+    ? {
+        ...(fixture.options.max_loop_iterations === undefined
+          ? {}
+          : { maxLoopIterations: fixture.options.max_loop_iterations }),
+        ...(fixture.options.max_function_call_depth === undefined
+          ? {}
+          : { maxFunctionCallDepth: fixture.options.max_function_call_depth }),
+      }
+    : undefined;
   if (!fixture.files) {
-    return evaluate(parse(fixture.source));
+    return evaluate(parse(fixture.source), { sandbox });
   }
   const dir = mkdtempSync(join(tmpdir(), "scorium-js-conformance-"));
   try {
@@ -31,7 +41,7 @@ function runFixture(fixture: any): Entry[] {
       writeFileSync(join(dir, name), content as string);
     }
     const entrySrc = readFileSync(join(dir, fixture.entry), "utf8");
-    return evaluate(parse(entrySrc), { baseDir: dir });
+    return evaluate(parse(entrySrc), { baseDir: dir, sandbox });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

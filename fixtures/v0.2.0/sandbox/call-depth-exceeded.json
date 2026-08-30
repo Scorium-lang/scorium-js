@@ -1,5 +1,8 @@
 {
-  "name": "unbounded fn recursion trips the default call-depth budget",
+  "name": "unbounded fn recursion trips the configured call-depth budget",
   "source": "fn recurse() {\n    return recurse()\n}\nvalue = recurse()",
+  "options": {
+    "max_function_call_depth": 16
+  },
   "expect_error": { "code": "scorium::eval::call_depth_exceeded" }
 }

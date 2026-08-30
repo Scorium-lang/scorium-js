@@ -119,7 +119,10 @@ export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
     maxFunctionCallDepth: sandbox.maxFunctionCallDepth,
     budget: { loopIterationsUsed: 0, callDepth: 0 },
   };
-  evalItems(doc.items, ctx);
+  const flow = evalItems(doc.items, ctx);
+  if (flow.kind === "return") {
+    throw new EvalError("scorium::eval::return_outside_function: `return` is only valid inside a Scorium function");
+  }
   return ctx.sink;
 }
 
@@ -201,7 +204,8 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
     case "node": {
       const header = item.header === null ? null : item.header.text;
       const children: Entry[] = [];
-      evalBlockScoped(item.body, { ...ctx, sink: children }); // a stray `return` inside a node body is discarded -- not validated yet, no fixture exercises it
+      const flow = evalBlockScoped(item.body, { ...ctx, sink: children });
+      if (flow.kind === "return") return flow;
       ctx.sink.push({ kind: "node", name: item.name, header, children });
       return NORMAL;
     }
@@ -209,7 +213,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
       ctx.functions.set(item.name, item);
       return NORMAL;
     case "script":
-      // Explicit-error requirement (scorium-spec §5/§7): a build that
+      // Explicit-error requirement (scorium-spec §1/§5): a build that
       // doesn't embed Lua must raise a clear diagnostic on script{},
       // never silently skip it or treat the body as a no-op.
       throw new EvalError("scorium::eval::script_error: script {} execution is not implemented in scorium-js (no Lua VM embedded; see scorium-spec §7, still unapproved)");
@@ -218,8 +222,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
       if (pathVal.kind !== "string") {
         throw new EvalError(`scorium::eval::type_error: an include path must be a string, found ${pathVal.kind}`);
       }
-      execInclude(pathVal.value, ctx);
-      return NORMAL;
+      return execInclude(pathVal.value, ctx);
     }
     case "exprstmt":
       evalExpr(item.expr, ctx); // side effect only: any entries the callee's body produces land in ctx.sink
@@ -292,7 +295,7 @@ function checkIncludePath(pathStr: string, ctx: EvalCtx): string {
   return resolved;
 }
 
-function execInclude(pathStr: string, ctx: EvalCtx): void {
+function execInclude(pathStr: string, ctx: EvalCtx): Flow {
   const resolved = checkIncludePath(pathStr, ctx);
   let canonical: string;
   try {
@@ -318,7 +321,9 @@ function execInclude(pathStr: string, ctx: EvalCtx): void {
   }
   ctx.sink.push({ kind: "include", path: pathStr });
   const childCtx: EvalCtx = { ...ctx, baseDir: dirname(resolved), includeStack: [...ctx.includeStack, canonical] };
-  evalItems(includedDoc.items, childCtx); // shares ctx.sink/atVars/locals/functions by reference -- merges into the includer
+  // Shares sink/variables/functions by reference and propagates `return`
+  // through an include reached from a Scorium function.
+  return evalItems(includedDoc.items, childCtx);
 }
 
 /** Total for/while iterations allowed across one whole evaluation (scorium-spec §3), not per-loop. */

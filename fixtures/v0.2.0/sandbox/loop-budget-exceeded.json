@@ -1,5 +1,8 @@
 {
-  "name": "a non-terminating while loop trips the default loop iteration budget",
+  "name": "a non-terminating while loop trips the configured iteration budget",
   "source": "local n = 0\nwhile true do\n    n = n + 1\nend",
+  "options": {
+    "max_loop_iterations": 16
+  },
   "expect_error": { "code": "scorium::eval::loop_budget_exceeded" }
 }

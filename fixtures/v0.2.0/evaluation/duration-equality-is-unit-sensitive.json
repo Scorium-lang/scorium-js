@@ -1,0 +1,19 @@
+{
+  "name": "duration equality compares amount and unit without normalization",
+  "source": "same = 1s == 1s\ndifferent_unit = 1s == 1000ms",
+  "expect": {
+    "type": "entries",
+    "value": [
+      {
+        "kind": "leaf",
+        "key": "same",
+        "value": { "type": "bool", "value": true }
+      },
+      {
+        "kind": "leaf",
+        "key": "different_unit",
+        "value": { "type": "bool", "value": false }
+      }
+    ]
+  }
+}

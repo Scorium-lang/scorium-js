@@ -1,8 +1,7 @@
 /**
  * The Scorium syntax tree. Covers the declarative subset, variables,
- * full expressions, control flow, and functions (scorium-spec §1-3).
- * Still missing: member/method calls, `include`, `script {}` -- see
- * README.md "Current scope".
+ * full expressions, control flow, functions, includes, and raw script
+ * preservation (scorium-spec §1-3).
  */
 
 /** A `#`/`--` line comment or a `--[[ ]]` block comment (scorium-spec §4). */
@@ -38,7 +37,7 @@ export type Item = LeafDecl | NodeDecl | VarDef | IfStmt | ForStmt | WhileStmt |
  * `script { ... }`: raw Lua text, captured verbatim and never parsed
  * as Scorium or reformatted (scorium-spec §1). This build can parse
  * and format a document containing one, but not execute it -- see
- * README.md and scorium-spec §7 (still unapproved).
+ * README.md and scorium-spec §1/§3.
  */
 export interface ScriptBlock {
   type: "script";
