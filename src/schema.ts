@@ -303,7 +303,7 @@ function checkType(expected: ValueType, value: Value): string | null {
   if (typeof expected === "string") {
     if (expected === "any") return null;
     if (expected === "float" && (value.kind === "float" || value.kind === "int")) return null;
-    const expectedKind = expected === "integer" ? "int" : expected;
+    const expectedKind = expected === "integer" ? "int" : expected === "boolean" ? "bool" : expected;
     return value.kind === expectedKind ? null : `expected ${expected}, found ${value.kind}`;
   }
   if (expected.kind === "list") {

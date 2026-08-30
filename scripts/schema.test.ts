@@ -64,3 +64,19 @@ test("float accepts an int value, matching Rust's numeric-widening rule", () => 
 
   assert.equal(result.isValid(), true);
 });
+
+test("the boolean type accepts a real bool value (regression: Value.kind is 'bool', not 'boolean')", () => {
+  const schema = Schema.builder().requiredKey("enabled", "boolean").build();
+  const entries = evaluate(parse("enabled = true"));
+  const result = schema.validate(entries);
+
+  assert.equal(result.isValid(), true);
+});
+
+test("the boolean type rejects a non-boolean value", () => {
+  const schema = Schema.builder().requiredKey("enabled", "boolean").build();
+  const entries = evaluate(parse('enabled = "yes"'));
+  const result = schema.validate(entries);
+
+  assert.equal(result.errors[0]?.code, "scorium::schema::wrong_type");
+});
