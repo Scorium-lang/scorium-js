@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.9.0-dev — unreleased
+
+Publish-readiness. Vendored the `scorium-spec` conformance fixtures
+into `fixtures/` (it has no GitHub repo of its own yet, so CI can't
+check it out) with an `SCORIUM_SPEC_FIXTURES` override for local
+development against a live sibling checkout. Added CI (typecheck,
+build, the full 31-fixture conformance run) and the org-wide/adapted
+legal and contribution docs (`LICENSE`, `TRADEMARKS.md`,
+`CONTRIBUTOR_TERMS.md`, `CONTRIBUTION_PERMISSION.md`, `COMMERCIAL.md`
+copied from `scorium-rust` verbatim or near-verbatim; `CONTRIBUTING.md`
+and `SECURITY.md` adapted for this ecosystem). Rewrote `README.md` in
+the same structural style as `scorium-rust`'s, now with a real Node/TS
+usage section.
+
+Caught and fixed a real gap while verifying the package would actually
+work once installed, not just imported from within this repo: Node
+explicitly refuses to strip TypeScript types for anything under
+`node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so
+shipping raw `.ts` as the published entry point -- this repo's whole
+"no build step" premise for local development -- would have been
+completely broken for real consumers, even though everything worked
+fine in-repo. Added a real build step (`tsc -p tsconfig.build.json`,
+using TypeScript 5.9's `rewriteRelativeImportExtensions` to keep
+authoring with explicit `.ts` import specifiers for Node's native
+dev-time stripping while still emitting valid `.js`), pointed
+`package.json`'s `main`/`exports`/`files` at the compiled `dist/`
+output, and verified end-to-end with a real `npm pack` + install into
+a scratch project, not just `tsc --noEmit`.
+
+Decided the npm package name: `scorium` (unscoped; confirmed available
+on the registry, matches the language name directly, already what
+`package.json` had).
+
+31/31 conformance fixtures still pass, both from the vendored copy and
+against a live `scorium-spec` checkout via the override.
+
 ## 0.8.0-dev — unreleased
 
 The host function/value registry (scorium-spec §6's "one registry,

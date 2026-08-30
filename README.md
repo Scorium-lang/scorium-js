@@ -1,131 +1,162 @@
-# scorium (scorium-js)
+# scorium
 
-**Status: the full non-Lua language core is implemented, including
-sandbox resource limits and structured diagnostics — see "Current
-scope" below. Not published to npm.**
+[![npm](https://img.shields.io/npm/v/scorium?style=flat-square&color=8EDDFF)](https://www.npmjs.com/package/scorium)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Status](https://img.shields.io/badge/status-pre--1.0-8EDDFF?style=flat-square)](./CHANGELOG.md)
+[![Source Available](https://img.shields.io/badge/source-available-8EDDFF?style=flat-square)](./LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/Scorium-lang/scorium-js?style=flat-square&logo=github)](https://github.com/Scorium-lang/scorium-js/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/Scorium-lang/scorium-js?style=flat-square&logo=github)](https://github.com/Scorium-lang/scorium-js/issues)
 
-A native TypeScript/JavaScript implementation of the [Scorium][spec]
-configuration language. Pure TypeScript, zero Rust: no Rust library, no
-Rust toolchain, no C-ABI wrapper, no Rust-generated WebAssembly, no Rust
-sidecar process. This is a native implementation, not a binding around
-`scorium-rust`.
+**Readable on the surface. Programmable when you need it.**
 
-[spec]: ../scorium-spec
+Scorium is a readable, programmable configuration language. It keeps
+ordinary configuration declarative while allowing expressions, conditions,
+loops, and functions when static data is not enough. **scorium-js is its
+native TypeScript/JavaScript implementation** -- pure TypeScript, zero
+Rust: no Rust library, no Rust toolchain, no C-ABI wrapper, no
+Rust-generated WebAssembly, no Rust sidecar process.
 
-## Language version
+```scor
+@base_port = 8000
 
-Pins and reports `SCORIUM_LANGUAGE_VERSION` (see `src/version.ts`) —
-currently `0.2.0-draft`, matching `scorium-spec`'s current draft. This
-package's own `package.json` version is independent of the language
-version it implements (see `scorium-spec/README.md` on why implementations
-release independently).
+server {
+    host = localhost
+    port = base_port + 80
+    timeout = 5s
+    enabled = true
+}
+
+for i = 1, 3 do
+    worker {
+        name = worker-$i
+        index = i
+    }
+end
+```
+
+A beginner writes ordinary data and never touches the programmable layer.
+An advanced user adds logic without migrating to another file format --
+see [Scorium's design principle](https://github.com/Scorium-lang/scorium-spec)
+for why that's the language's whole point, not an incidental feature.
+
+## Install
+
+```bash
+npm install scorium
+```
+
+Requires Node.js 22+.
+
+## Usage
+
+```ts
+import { parse, evaluate, format } from "scorium";
+
+const source = `
+server {
+    port = 8080
+    timeout = 5s
+    enabled = true
+}
+`;
+
+const doc = parse(source);
+const entries = evaluate(doc);
+// [{ kind: "node", name: "server", header: null, children: [
+//   { kind: "leaf", key: "port", value: { kind: "int", value: 8080n } },
+//   { kind: "leaf", key: "timeout", value: { kind: "duration", amount: 5, unit: "s" } },
+//   { kind: "leaf", key: "enabled", value: { kind: "bool", value: true } },
+// ]}]
+
+console.log(format(doc)); // canonical formatting, byte-identical to every other Scorium implementation
+```
+
+Handling errors -- every thrown error carries a real `.code`, not just a
+message to pattern-match:
+
+```ts
+import { parse, evaluate, EvalError } from "scorium";
+
+try {
+  evaluate(parse("x = 1 / 0"));
+} catch (err) {
+  if (err instanceof EvalError && err.code === "scorium::eval::division_by_zero") {
+    // handle it
+  }
+}
+```
+
+Registering host functions and values (identifier resolution step 4 --
+"one registry, multiple surfaces"):
+
+```ts
+evaluate(parse("terminal = pick(kitty, alacritty)"), {
+  hostFunctions: {
+    pick: (args) => args[0] ?? { kind: "nil" },
+  },
+  hostValues: {
+    environment: { kind: "string", value: "production" },
+  },
+});
+```
+
+Sandbox limits and `include` behavior are configurable the same way --
+see `EvalOptions` in `src/eval.ts` for the full surface until real API
+docs exist.
 
 ## Current scope
 
-This is a staged build, following the same order `scorium-spec` itself
-was drafted in (grammar → values → evaluation → formatter → diagnostics →
-sandbox). **Implemented so far:**
+The entire non-Lua Scorium language core is implemented and passes
+**31/31** of `scorium-spec`'s conformance fixtures: the declarative
+surface, variables and interpolation, full expressions (exact `Int`/
+`Float` semantics -- `Int` is backed by `bigint`, not `number`, to
+represent the full 64-bit signed range exactly), control flow, functions,
+member/method calls, `include` (with real path-containment and cycle
+detection), the canonical formatter, sandbox resource limits, and
+structured `.code`-bearing diagnostics.
 
-- The declarative surface: nodes (with optional headers), leaves, and
-  all eight value types (`Int`, `Float`, `Bool`, `Nil`, `Str`, `Color`,
-  `Duration`, `List`), with `Int` backed by `bigint` to satisfy
-  `scorium-spec §2`'s exact-representation requirement.
-- `@`-variables and `$`-interpolation in bare strings, including the
-  undefined-interpolation error (no fallback for `$name`, unlike a plain
-  identifier).
-- Full expressions: arithmetic (`+ - * / %`, checked `Int` overflow,
-  `Int`/`Int` division always `Float`, `%` as pure Euclidean remainder),
-  comparison (`== ~= < > <= >=`, with exact `Int`/`Float` ordering that
-  never casts the integer through `f64` first), logic (`and`/`or`
-  short-circuiting, `not`), unary negation, and grouping parens.
-- **All five steps** of `scorium-spec §1`'s identifier resolution: 1
-  (local/param/loop-var), 2 (`@`-variable), 3 (sibling leaf — a leaf
-  emitted earlier in the *same* body), 4 (host value, via
-  `evaluate(doc, { hostValues })`), and 5 (fallback to a literal string).
-- A host function/value registry (`evaluate(doc, { hostFunctions,
-  hostValues })`) — "one registry, multiple surfaces" (scorium-spec §6):
-  a host function is callable exactly like a Scorium `fn` (`f(a, b)`), a
-  host value resolves as a plain identifier. A Scorium `fn` of the same
-  name takes priority over a host function, matching `scorium-rust`'s own
-  precedence. A throw inside a host function is wrapped as
-  `scorium::eval::type_error`, matching `scorium-rust`'s
-  `Result<Value, String>` host-function contract.
-- Control flow (`if`/`elseif`/`else`, numeric `for` with optional step,
-  `while`), `local` and the leaf-reassignment rule (`n = n + 1` updates
-  an existing `local`, but — confirmed against a real `scorium-rust`
-  test — does *not* apply to a `fn` parameter of the same name; that
-  case still emits a leaf), `fn` definitions, and calls (statement- and
-  expression-position, plain-identifier or member callees).
-- Member/method calls (`primary.darken(1.0)`) — the color methods
-  (`darken`/`lighten`/`alpha`), the only value type with methods.
-- `include`, with path containment enforced on the canonicalized
-  (symlink-resolved) path per `scorium-spec §6` — not just a textual
-  `..`/absolute-path check — and cycle detection.
-- The canonical formatter (`scorium-spec §4`): comment preservation
-  (leading + same-line trailing, item granularity; `--` normalizes to
-  `#`), blank-line capping to one, precedence-driven re-parenthesization,
-  and the `Int`/`Float`/duration literal-formatting rules. Verified
-  byte-for-byte against real `scorium-rust` canonical output for
-  constructs the JSON fixtures don't directly cover (`for`, `if`/`else`,
-  `fn`, `include`).
-- `script { ... }` is parsed and formatted correctly (raw-captured
-  verbatim, never reformatted) but **not executable** — evaluating one
-  raises a clear, explicit error rather than silently no-op'ing or (the
-  bug this caught during development) accidentally misparsing the body
-  as ordinary Scorium items. See "Not yet implemented" below.
-- Sandbox resource limits (`scorium-spec §3`/`§6`): a total loop-iteration
-  budget shared across the *whole* evaluation (not per-loop) and a
-  function call-depth limit, both configurable via `evaluate(doc, {
-  sandbox: { maxLoopIterations, maxFunctionCallDepth } })`, defaulting to
-  `scorium-rust`'s own values (1,000,000 / 256). Script instruction/memory
-  limits aren't included — they're Lua-specific and no Lua VM is embedded.
-- Structured diagnostics: every thrown error is a `ScoriumError` (via
-  `LexError`/`ParseError`/`EvalError`) exposing a real `.code` field —
-  `scorium::eval::loop_budget_exceeded`, `scorium::eval::type_error`, etc.
-  — extracted from the message text every throw site already used, so
-  callers can branch on `.code` reliably instead of pattern-matching
-  message strings.
-- The `squeezed_operator`, `at_in_expression`, and `dollar_in_expression`
-  lex/parse diagnostics, and the `undefined_interpolation`,
-  `arithmetic_overflow`, `unknown_function`, `includes_disabled`,
-  `include_path_denied`, `include_cycle`, `include_io`, `include_parse`,
-  `script_error`, `loop_budget_exceeded`, and `call_depth_exceeded` eval
-  diagnostics.
+**Not implemented:** `script { }` *execution* -- no Lua VM is embedded.
+A document containing one still parses and formats correctly; evaluating
+it raises a clear error rather than silently doing nothing. Whether and
+how scorium-js ever executes Lua is a family-wide decision tracked in
+`scorium-spec`'s (still unapproved) conformance-levels proposal, not
+something this repository decides alone.
 
-**31/31 `scorium-spec` conformance fixtures pass — the entire corpus,
-including `sandbox/`** (see "Conformance" below). The full non-Lua
-language core, including all five identifier-resolution steps and host
-integration, is implemented.
+## Status
 
-**Not yet implemented** (deferred, not silently unsupported — anything
-outside this should be treated as "not yet built," not "not part of the
-language"):
+The language core and its conformance verification are done; this is a
+real, working, embeddable implementation, but it is pre-1.0 and the
+public API may change. See [CHANGELOG.md](./CHANGELOG.md) for what
+shipped and when.
 
-- `script {}` *execution* — no Lua VM embedded (the Full-conformance-level
-  question from `scorium-spec §7`, itself still unapproved). Parsing and
-  formatting a document containing one already works (see above). This is
-  the only remaining gap in the language core.
-- The rest of the diagnostic code catalog (`scorium-spec §5`) beyond the
-  codes listed above.
-- No host-integration conformance fixtures exist yet in `scorium-spec`
-  (a deliberately separate, undesigned corpus per its own
-  `conformance/README.md`) — the host registry above is verified against
-  `scorium-rust`'s own equivalent tests (`select()`, `environment`), not
-  against a fixture.
+## Security
 
-## Conformance
+There is no `script { }` execution yet, so there is no Lua sandbox
+surface to secure -- the threat model today is the native language core's
+own resource limits (loop budget, call-depth limit) and `include` path
+containment. See [SECURITY.md](./SECURITY.md) for the full model and how
+to report a vulnerability.
 
-`npm run conformance` runs `scripts/conformance.ts` against
-`../scorium-spec/conformance/v0.2.0-draft/{values,evaluation,diagnostics,sandbox,formatter}/`
-(relative sibling checkout — only works when `scorium-spec` is checked
-out alongside this repo, e.g. both under `scorium-lang/`), including
-multi-file `include` fixtures (written to a scratch temp directory per
-fixture) and `sandbox/`'s resource-limit fixtures, now safe to run since
-the limits they exercise actually exist. **31/31 passes**, runs in well
-under a second.
+## Licensing
 
-## Requirements
+Scorium is **source-available** under the
+[PolyForm Strict License 1.0.0](./LICENSE). It is free for personal,
+educational, hobby, and local noncommercial use, and for
+contribution-focused forks. **Commercial use requires a written
+agreement.**
 
-Node.js 22+. This repo runs TypeScript source files directly (no build
-step in development) — Node's native TypeScript support strips types at
-runtime. `npm run typecheck` runs `tsc --noEmit` for real type-checking.
+Scorium is *not* OSI-approved open source. Only official releases
+published by @fi3w0 (npm, GitHub Releases) are sanctioned distribution
+channels; see [COMMERCIAL.md](./COMMERCIAL.md) and
+[TRADEMARKS.md](./TRADEMARKS.md).
+
+> The legal files are initial project terms that have not been reviewed
+> by a lawyer. Obtain professional legal review before relying on them
+> for commercial use.
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md),
+[CONTRIBUTION_PERMISSION.md](./CONTRIBUTION_PERMISSION.md), and
+[CONTRIBUTOR_TERMS.md](./CONTRIBUTOR_TERMS.md) before opening a pull
+request.
