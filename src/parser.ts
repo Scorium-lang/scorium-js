@@ -100,6 +100,11 @@ class Parser {
       }
       case "fn":
         return this.parseFnDef();
+      case "include": {
+        this.advance();
+        const path = this.parsePrimary();
+        return { type: "include", path };
+      }
     }
 
     const nameTok = this.expect("ident");
