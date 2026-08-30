@@ -32,6 +32,54 @@ function isSqueezeBoundary(ch: string | undefined): boolean {
   return !/\s/.test(ch) && !",{}[]".includes(ch);
 }
 
+/** Tokens after which a value/expression follows next, so `#` means color and a value-position bare run is used. */
+const VALUE_FOLLOWS = new Set<TokenKind>([
+  "eq",
+  "lbracket",
+  "comma",
+  "lparen",
+  "plus",
+  "minus",
+  "star",
+  "slash",
+  "percent",
+  "eqeq",
+  "noteq",
+  "lt",
+  "gt",
+  "lte",
+  "gte",
+  "and",
+  "or",
+  "not",
+  "if",
+  "elseif",
+  "while",
+  "return",
+]);
+/** Tokens after which a key/node/param name or a new statement follows, so `#` means comment and a plain-ident scan is used. */
+const VALUE_ENDS = new Set<TokenKind>([
+  "ident",
+  "barestr",
+  "int",
+  "float",
+  "bool",
+  "nil",
+  "color",
+  "duration",
+  "string",
+  "rbracket",
+  "rparen",
+  "newline",
+  "then",
+  "do",
+  "end",
+  "else",
+  "for",
+  "local",
+  "fn",
+]);
+
 export class Lexer {
   private readonly src: string;
   private pos = 0;
@@ -53,21 +101,9 @@ export class Lexer {
   }
 
   private push(kind: TokenKind, extra: Partial<Token> = {}, start = this.pos): Token {
-    const isValueToken =
-      kind === "ident" ||
-      kind === "barestr" ||
-      kind === "int" ||
-      kind === "float" ||
-      kind === "bool" ||
-      kind === "nil" ||
-      kind === "color" ||
-      kind === "duration" ||
-      kind === "string" ||
-      kind === "rbracket" ||
-      kind === "rparen";
-    if (kind === "eq" || kind === "lbracket" || kind === "comma" || kind === "lparen") {
+    if (VALUE_FOLLOWS.has(kind)) {
       this.expectValue = true;
-    } else if (isValueToken || kind === "newline") {
+    } else if (VALUE_ENDS.has(kind)) {
       this.expectValue = false;
     }
     if (kind === "lbracket") this.bracketDepth++;
@@ -314,6 +350,17 @@ export class Lexer {
     if (text === "and") return this.push("and", {}, start);
     if (text === "or") return this.push("or", {}, start);
     if (text === "not") return this.push("not", {}, start);
+    if (text === "if") return this.push("if", {}, start);
+    if (text === "then") return this.push("then", {}, start);
+    if (text === "elseif") return this.push("elseif", {}, start);
+    if (text === "else") return this.push("else", {}, start);
+    if (text === "end") return this.push("end", {}, start);
+    if (text === "for") return this.push("for", {}, start);
+    if (text === "do") return this.push("do", {}, start);
+    if (text === "while") return this.push("while", {}, start);
+    if (text === "local") return this.push("local", {}, start);
+    if (text === "return") return this.push("return", {}, start);
+    if (text === "fn") return this.push("fn", {}, start);
     return this.push("ident", {}, start);
   }
 }
