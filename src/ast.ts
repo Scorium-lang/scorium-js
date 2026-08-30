@@ -106,5 +106,12 @@ export type Expr =
   | { type: "ident"; name: string }
   | { type: "unary"; op: UnOp; operand: Expr }
   | { type: "binary"; op: BinOp; left: Expr; right: Expr }
-  /** A call to a plain-identifier callee only -- no member/method calls yet. */
-  | { type: "call"; name: string; args: Expr[] };
+  /**
+   * `base.field`, uncalled. Per §1: if `base` isn't a real binding this
+   * is just a literal string (`cert.pem`); only a real value throws
+   * (no field access without a call -- only `.field(...)` is
+   * supported). This is a call's callee shape.
+   */
+  | { type: "member"; base: Expr; field: string }
+  /** `callee(args)`. `callee` is an `ident` (plain function call) or a `member` (method call, colors only); anything else is not callable. */
+  | { type: "call"; callee: Expr; args: Expr[] };
