@@ -9,7 +9,12 @@ import { ScoriumError } from "../src/errors.ts";
 import type { Entry } from "../src/entry.ts";
 import { decodeEntries, entriesEqual } from "../src/fixture-codec.ts";
 
-const SPEC_ROOT = join(import.meta.dirname, "..", "..", "scorium-spec", "conformance", "v0.2.0-draft");
+// Defaults to the vendored copy (fixtures/README.md) so this runs
+// standalone from a fresh clone -- scorium-spec has no repo of its own
+// to check out yet. Point SCORIUM_SPEC_FIXTURES at a live sibling
+// checkout's conformance/<version>/ directory when iterating on
+// scorium-spec itself.
+const SPEC_ROOT = process.env.SCORIUM_SPEC_FIXTURES ?? join(import.meta.dirname, "..", "fixtures", "v0.2.0-draft");
 const CATEGORIES = ["values", "evaluation", "diagnostics", "sandbox"];
 
 let pass = 0;
