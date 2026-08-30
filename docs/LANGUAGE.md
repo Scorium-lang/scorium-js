@@ -7,7 +7,7 @@ loops, and functions when static data is not enough.
 > Simple configuration for beginners. Programmable configuration for
 > advanced users.
 
-This guide describes Scorium language version `0.2.0-draft`, which
+This guide describes stable Scorium language version `0.2.0`, which
 `scorium-js` implements natively in TypeScript. The normative definition is
 maintained by the separate `scorium-spec` project; this guide is the
 approachable introduction.
@@ -270,6 +270,10 @@ fn double(x) {
 
 total = double(5)
 ```
+
+Using `return` when no Scorium function is active raises
+`scorium::eval::return_outside_function`. A return inside nested control flow
+or a node body still exits the surrounding function.
 
 Function-call depth is bounded. The default maximum is 256 nested calls.
 

@@ -56,6 +56,7 @@ aligning that edge case remains implementation work.
 | --- | --- |
 | `scorium::eval::undefined_interpolation` | `$name` has no matching definition. |
 | `scorium::eval::unknown_function` | Neither a Scorium function nor host function exists. |
+| `scorium::eval::return_outside_function` | `return` was evaluated without an active Scorium function. |
 | `scorium::eval::type_error` | An operand, call, method, or include path has the wrong type. |
 | `scorium::eval::division_by_zero` | Division or modulo uses a zero divisor. |
 | `scorium::eval::arithmetic_overflow` | Integer arithmetic leaves the signed 64-bit range. |

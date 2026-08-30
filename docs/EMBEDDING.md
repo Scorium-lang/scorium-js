@@ -1,8 +1,9 @@
 # Embedding Scorium
 
-`scorium` is a native TypeScript/JavaScript library for parsing, evaluating,
-and formatting `.scor` configuration. It has no Rust, WebAssembly, native
-addon, sidecar process, or runtime dependency.
+`scorium` is the native TypeScript/JavaScript implementation for parsing,
+evaluating, and formatting `.scor` configuration. It implements the same
+versioned language contract as every conforming Scorium implementation and
+provides an idiomatic API for JavaScript and TypeScript hosts.
 
 ## The pipeline
 

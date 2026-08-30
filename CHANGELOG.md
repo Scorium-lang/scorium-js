@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.1 — 2026-08-30
+
+Updated the implementation to stable Scorium language version `0.2.0` and
+vendored its 34-fixture conformance corpus. The conformance runner now applies
+fixture-specific loop and function-depth limits instead of relying on package
+defaults.
+
+Fixed `return` semantics: using it outside a Scorium function now raises
+`scorium::eval::return_outside_function`, while a return inside nested control
+flow, a node body, or an included file propagates to the active function.
+
+GitHub Releases now use the matching section of this changelog as their
+release body and fail safely when the version section is missing or empty.
+
 ## 0.9.0 — 2026-08-30
 
 First published release, to npm as `scorium`. Dropped the `-dev` suffix
@@ -180,4 +194,4 @@ for the **declarative literal subset only** (nodes, leaves, and the eight
 value types — no variables, expressions/operators, control flow,
 functions, `include`, or `script {}` yet). Verified against the `values/`
 category of `scorium-spec`'s `0.2.0-draft` conformance fixtures (8/8
-passing). No Rust dependency anywhere in this package.
+passing). Published as a self-contained TypeScript/JavaScript package.

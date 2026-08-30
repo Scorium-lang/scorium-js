@@ -1,7 +1,7 @@
 # Scorium Grammar
 
 This document summarizes the grammar accepted by `scorium-js` for Scorium
-language version `0.2.0-draft`. The normative grammar belongs to the
+stable language version `0.2.0`. The normative grammar belongs to the
 separate `scorium-spec` project. If this guide, the implementation, and the
 spec disagree, the discrepancy must be fixed explicitly; the spec is the
 language authority.
@@ -85,6 +85,10 @@ call_stmt ::= call
 The numeric `for` range includes both endpoints. Its default step is `1`,
 and step `0` is a type error.
 
+`return` is valid only while a Scorium function is executing. Outside a
+function it raises `scorium::eval::return_outside_function`; inside nested
+control flow or a node body it exits the surrounding function.
+
 ## Script blocks
 
 ```ebnf
@@ -142,7 +146,7 @@ end or extend the captured block incorrectly. This does not affect ordinary
 Scorium syntax, and script execution remains unavailable, but the parser gap
 must be fixed before claiming complete raw-Lua lexical compatibility.
 
-The following are outside language version `0.2.0-draft`:
+The following are outside language version `0.2.0`:
 
 - host-pluggable lexer syntax;
 - generic `for` over tables or iterators;

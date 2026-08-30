@@ -7,8 +7,8 @@ planned features are not mistaken for shipped behavior.
 
 The native non-Lua language core, canonical formatter, include policy,
 resource limits, and TypeScript embedding API are implemented. The package
-passes all 31 vendored conformance fixtures for language version
-`0.2.0-draft`. It is pre-1.0, so its public TypeScript API may change between
+passes all 34 vendored conformance fixtures for stable language version
+`0.2.0`. It is pre-1.0, so its public TypeScript API may change between
 minor versions.
 
 ## Implemented
@@ -41,10 +41,10 @@ These are directions, not release promises.
 
 ### Language-family decisions
 
-- **`script { }` execution.** No Lua VM is embedded. The language-family
-  conformance-level proposal must be settled before this implementation
-  chooses a runtime strategy. Before then, the raw-script scanner also needs
-  to account for braces inside Lua strings and comments.
+- **`script { }` execution.** No Lua VM is embedded. Stable Scorium `0.2.0`
+  makes this an optional capability. Adding it here requires a suitable Lua
+  runtime and a sandbox/security review. Before then, the raw-script scanner
+  also needs to account for braces inside Lua strings and comments.
 - **Host-pluggable literal syntax.** Hosts can supply values and functions,
   but cannot register new lexer token shapes.
 - **Generic iteration.** Only numeric `for` is specified.

@@ -12,9 +12,12 @@
 Scorium is a readable, programmable configuration language. It keeps
 ordinary configuration declarative while allowing expressions, conditions,
 loops, and functions when static data is not enough. **scorium-js is its
-native TypeScript/JavaScript implementation** -- pure TypeScript, zero
-Rust: no Rust library, no Rust toolchain, no C-ABI wrapper, no
-Rust-generated WebAssembly, no Rust sidecar process.
+native TypeScript/JavaScript implementation.** It exposes the shared,
+versioned Scorium language contract through idiomatic APIs for JavaScript and
+TypeScript applications. Rust, JavaScript/TypeScript, and future supported
+languages are peer implementations; compatibility comes from the same
+specification and conformance fixtures, not from one implementation wrapping
+another.
 
 ```scor
 @base_port = 8000
@@ -105,8 +108,9 @@ see the [embedding guide](./docs/EMBEDDING.md) for the complete API.
 
 ## Current scope
 
-The entire non-Lua Scorium language core is implemented and passes
-**31/31** of `scorium-spec`'s conformance fixtures: the declarative
+The entire non-Lua Scorium language core is implemented for stable language
+version **`0.2.0`** and passes **34/34** of `scorium-spec`'s conformance
+fixtures: the declarative
 surface, variables and interpolation, full expressions (exact `Int`/
 `Float` semantics -- `Int` is backed by `bigint`, not `number`, to
 represent the full 64-bit signed range exactly), control flow, functions,
@@ -118,8 +122,8 @@ structured `.code`-bearing diagnostics.
 A document containing one still parses and formats correctly; evaluating
 it raises a clear error rather than silently doing nothing. Whether and
 how scorium-js ever executes Lua is a family-wide decision tracked in
-`scorium-spec`'s (still unapproved) conformance-levels proposal, not
-something this repository decides alone.
+the implementation's host and sandbox strategy; stable Scorium `0.2.0`
+explicitly permits implementations without Lua execution.
 
 ## Status
 
