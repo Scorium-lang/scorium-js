@@ -28,12 +28,17 @@ minor versions.
 
 - native TypeScript parser, evaluator, and formatter;
 - exported AST, entry, value, option, and error types;
-- catchable `scorium::*` diagnostic codes;
+- catchable `scorium::*` diagnostic codes, each carrying a structured source
+  span and line/column location, plus a rendered excerpt via `.format()`;
+- a schema-validation API (`Schema`/`NodeSchema` builders, `scorium::schema::*`
+  diagnostic codes matching `scorium-rs`'s `scorium-schema` crate);
 - host value and function registration;
 - configurable loop, call-depth, and include policies;
 - canonical, idempotent formatting;
 - versioned cross-implementation conformance fixtures in CI;
-- ESM npm package with declarations and no runtime dependencies.
+- ESM npm package with declarations and no runtime dependencies;
+- a `scorium` CLI (`check`/`parse`/`fmt`/`fmt --check`/`eval`), matching
+  `scorium-cli`'s subcommands and generic-runtime framing.
 
 ## Deferred
 
@@ -53,8 +58,6 @@ These are directions, not release promises.
 
 ### JS/TypeScript integration
 
-- a schema-validation package or host-schema API;
-- structured source spans and line/column metadata on public errors;
 - async include loading or a host-provided file resolver;
 - browser-compatible parsing and formatting entry points that do not import
   Node filesystem modules through the evaluator bundle;
@@ -62,7 +65,6 @@ These are directions, not release promises.
 
 ### Tooling
 
-- a Scorium CLI distributed through npm;
 - an LSP for diagnostics, completion, hover, and navigation;
 - editor syntax packages;
 - source maps between formatted output and the original source.

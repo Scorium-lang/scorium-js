@@ -7,7 +7,7 @@ namespaced as `scorium::<stage>::<name>`:
 scorium::lex::*     lexer
 scorium::parse::*   parser
 scorium::eval::*    evaluator
-scorium::schema::*  schema validation (not provided by scorium-js)
+scorium::schema::*  schema validation
 ```
 
 `scorium-js` errors extend `ScoriumError` and expose a catchable `.code`
@@ -69,6 +69,20 @@ aligning that edge case remains implementation work.
 | `scorium::eval::loop_budget_exceeded` | The evaluation exceeded its loop budget. |
 | `scorium::eval::call_depth_exceeded` | Scorium function nesting exceeded its limit. |
 
+## Schema (`scorium::schema`)
+
+| Code | Meaning |
+| --- | --- |
+| `scorium::schema::unknown_node` | A node has no matching entry in the schema. |
+| `scorium::schema::unknown_key` | A leaf key has no matching entry in the schema. |
+| `scorium::schema::missing_required_key` | A `requiredKey` was not present. |
+| `scorium::schema::wrong_type` | A value's type does not match the schema's `ValueType`. |
+| `scorium::schema::duplicate_key` | A key repeats where the schema's `duplicateKeyPolicy` is `"error"`. |
+| `scorium::schema::invalid_header` | A node's header failed its `HeaderValidator`. |
+
+These match `scorium-rs`'s `scorium-schema` crate's codes exactly. See
+[README.md](../README.md#current-scope) for a usage example.
+
 ## Error classes
 
 | Class | Sources |
@@ -77,8 +91,11 @@ aligning that edge case remains implementation work.
 | `LexError` | Tokenization |
 | `ParseError` | Parsing |
 | `EvalError` | Evaluation, includes, host calls, and resource limits |
+| `SchemaError` | Schema validation |
 
-Today the public error contract is `.code` plus the human-readable
-`.message`. Some messages contain a source offset, but there is not yet a
-uniform exported span/line/column structure or graphical renderer. Consumers
-should not parse locations from message text.
+Every `ScoriumError` carries `.code`, `.message`, and, whenever a source
+was available, a structured `.span` (byte offsets), `.location`/
+`.endLocation` (1-based line/column), and `.sourceName`. Call `.format()`
+for a rendered `path:line:column`, message, source excerpt, and underline,
+the same shape the CLI prints. Consumers should still match on `.code`,
+never parse locations or wording out of `.message`.

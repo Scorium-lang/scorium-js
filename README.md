@@ -103,6 +103,37 @@ evaluate(parse("terminal = pick(kitty, alacritty)"), {
 Sandbox limits and `include` behavior are configurable the same way --
 see the [embedding guide](./docs/EMBEDDING.md) for the complete API.
 
+Validating an evaluated tree against a host-defined shape, with the same
+`scorium::schema::*` diagnostic codes as `scorium-rs`'s `scorium-schema`:
+
+```ts
+import { Schema, evaluate, parse } from "scorium";
+
+const schema = Schema.builder()
+  .requiredKey("port", "integer")
+  .key("host", "string")
+  .build();
+
+const result = schema.validate(evaluate(parse(source)));
+if (!result.isValid()) {
+  for (const error of result.errors) console.error(error.format());
+}
+```
+
+## CLI
+
+```bash
+npx scorium check config.scor   # parse + evaluate; report diagnostics
+npx scorium parse config.scor   # print the parsed syntax tree
+npx scorium fmt config.scor     # format in place
+npx scorium fmt --check config.scor
+npx scorium eval config.scor    # print the evaluated configuration tree
+```
+
+`check` and `eval` run against a *generic* runtime -- no host functions or
+schema attached, mirroring `scorium-cli`'s framing; an embedding
+application supplies those itself.
+
 ## Current scope
 
 The entire non-Lua Scorium language core is implemented for stable language
@@ -112,8 +143,9 @@ surface, variables and interpolation, full expressions (exact `Int`/
 `Float` semantics -- `Int` is backed by `bigint`, not `number`, to
 represent the full 64-bit signed range exactly), control flow, functions,
 member/method calls, `include` (with real path-containment and cycle
-detection), the canonical formatter, sandbox resource limits, and
-structured `.code`-bearing diagnostics.
+detection), the canonical formatter, sandbox resource limits, schema
+validation, and structured `.code`-bearing diagnostics with source spans,
+line/column locations, and a `.format()` excerpt.
 
 **Not implemented:** `script { }` *execution* -- no Lua VM is embedded.
 A document containing one still parses and formats correctly; evaluating

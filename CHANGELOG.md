@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.2 — 2026-08-30
+
+Closed the three biggest gaps against `scorium-rs`'s tooling.
+
+- **Structured diagnostics.** Every `ScoriumError` now carries `.span`
+  (byte offsets), `.location`/`.endLocation` (line/column), `.sourceName`,
+  and a `.format()` renderer producing the same `path:line:column` +
+  excerpt + underline shape the CLI prints. Evaluated `Entry` values also
+  retain their declaration span.
+- **Schema validation.** A new `Schema`/`NodeSchema` builder API validates
+  an evaluated tree, with `scorium::schema::*` diagnostic codes matching
+  `scorium-rs`'s `scorium-schema` crate exactly (`unknown_node`,
+  `unknown_key`, `missing_required_key`, `wrong_type`, `duplicate_key`,
+  `invalid_header`), including did-you-mean suggestions on unknown keys.
+- **CLI.** `npx scorium check|parse|fmt|eval <file>` mirrors
+  `scorium-cli`'s subcommands (`fmt --check` included) and its
+  generic-runtime framing -- no host functions or schema attached, since
+  those are an embedding application's responsibility. Runs directly from
+  TypeScript source via Node's native type-stripping, same as the rest of
+  the package.
+
 ## 0.9.1 — 2026-08-30
 
 Updated the implementation to stable Scorium language version `0.2.0` and
