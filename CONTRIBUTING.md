@@ -66,8 +66,11 @@ Update the version in both `package.json` and `package-lock.json`, then
 merge or push the release commit to `main`. After typechecking, building,
 and conformance testing pass, CI compares the local version with the
 versions already on npm. It publishes only when the local version is newer
-than every published version; otherwise the publish job exits successfully
-without changing npm.
+than every published version; equal versions are skipped and version
+downgrades fail. After npm succeeds, CI creates the matching
+`v<package-version>` Git tag and GitHub Release at the exact release commit.
+Documentation-only pushes and unchanged versions do not create new tags or
+releases.
 
 Publishing uses npm Trusted Publishing with GitHub Actions OIDC; no npm
 access token is stored in GitHub. In the npm package settings, configure
@@ -79,10 +82,11 @@ the trusted publisher with these exact values:
 - Workflow filename: `ci.yml`
 - Allowed action: `npm publish`
 
-The `scorium` package must already exist before npm can configure a trusted
-publisher. For the first release only, a maintainer must publish `0.9.0`
-manually with 2FA. Configure Trusted Publishing immediately afterward;
-future versions are then published by CI with short-lived OIDC credentials.
+The initial `0.9.0` publication and Trusted Publishing setup are complete;
+future versions are published by CI with short-lived OIDC credentials.
+The publish job has GitHub `contents: write` only so it can create the
+version tag and Release after npm succeeds. Checkout never persists that
+token.
 
 ## Code quality expectations
 

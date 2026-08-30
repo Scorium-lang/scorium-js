@@ -38,12 +38,12 @@ jobs:
         run: npm test
 
   publish:
-    name: publish newer version to npm
+    name: publish newer version and create release
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
@@ -68,22 +68,69 @@ jobs:
           package_name="$(node --print "require('./package.json').name")"
           package_version="$(node --print "require('./package.json').version")"
 
+          echo "package=$package_name" >> "$GITHUB_OUTPUT"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
           set +e
-          registry_output="$(npm view "${package_name}@>=${package_version}" version 2>&1)"
-          registry_status=$?
+          newer_output="$(npm view "${package_name}@>${package_version}" version 2>&1)"
+          newer_status=$?
           set -e
 
-          if [ "$registry_status" -eq 0 ]; then
-            echo "${package_name}@${package_version} is not newer than every published version; skipping."
+          if [ "$newer_status" -eq 0 ]; then
+            echo "Refusing to publish ${package_name}@${package_version}; newer version(s) already exist: ${newer_output}" >&2
+            exit 1
+          elif ! grep -q "E404" <<< "$newer_output"; then
+            echo "$newer_output" >&2
+            exit "$newer_status"
+          fi
+
+          set +e
+          exact_output="$(npm view "${package_name}@${package_version}" version 2>&1)"
+          exact_status=$?
+          set -e
+
+          if [ "$exact_status" -eq 0 ]; then
+            echo "${package_name}@${package_version} is already published; skipping npm publish."
             echo "publish=false" >> "$GITHUB_OUTPUT"
-          elif grep -q "E404" <<< "$registry_output"; then
+            published_git_head="$(npm view "${package_name}@${package_version}" gitHead 2>/dev/null || true)"
+            if [ "$published_git_head" = "$GITHUB_SHA" ]; then
+              echo "The published package came from this commit; ensuring its GitHub Release exists."
+              echo "release=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "release=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif grep -q "E404" <<< "$exact_output"; then
             echo "${package_name}@${package_version} is newer than every published version."
             echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
           else
-            echo "$registry_output" >&2
-            exit "$registry_status"
+            echo "$exact_output" >&2
+            exit "$exact_status"
           fi
 
       - name: Publish to npm
         if: steps.version.outputs.publish == 'true'
         run: npm publish --access public
+
+      - name: Create version tag and GitHub Release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="v${RELEASE_VERSION}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release $tag already exists; skipping."
+            exit 0
+          fi
+
+          if tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha 2>/dev/null)"; then
+            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "Refusing to release: $tag already points to $tag_sha, not $GITHUB_SHA." >&2
+              exit 1
+            fi
+            gh release create "$tag" --verify-tag --title "scorium $tag" --generate-notes
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "scorium $tag" --generate-notes
+          fi
