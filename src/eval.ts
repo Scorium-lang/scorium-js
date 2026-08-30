@@ -153,6 +153,11 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
     case "fndef":
       ctx.functions.set(item.name, item);
       return NORMAL;
+    case "script":
+      // Explicit-error requirement (scorium-spec §5/§7): a build that
+      // doesn't embed Lua must raise a clear diagnostic on script{},
+      // never silently skip it or treat the body as a no-op.
+      throw new EvalError("scorium::eval::script_error: script {} execution is not implemented in scorium-js (no Lua VM embedded; see scorium-spec §7, still unapproved)");
     case "include": {
       const pathVal = evalExpr(item.path, ctx);
       if (pathVal.kind !== "string") {
