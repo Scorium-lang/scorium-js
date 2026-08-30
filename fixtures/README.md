@@ -1,7 +1,7 @@
 # Vendored conformance fixtures
 
 `v0.2.0/` is a **vendored copy** of `scorium-spec/conformance/v0.2.0/`,
-not a live reference — `scorium-spec` has no GitHub repo of its own yet,
+not a live reference -- `scorium-spec` has no GitHub repo of its own yet,
 so CI here can't check it out as a dependency. Vendoring keeps this repo
 self-contained and its CI runnable from a fresh clone.
 
@@ -12,7 +12,7 @@ or published package) instead of a manual copy.
 
 ## Keeping this in sync
 
-There's no automation for this yet — when `scorium-spec`'s
+There's no automation for this yet -- when `scorium-spec`'s
 `conformance/` changes, re-copy it by hand:
 
 ```sh

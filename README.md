@@ -1,4 +1,4 @@
-# scorium
+# Scorium
 
 [![npm](https://img.shields.io/npm/v/scorium?style=flat-square&color=8EDDFF)](https://www.npmjs.com/package/scorium)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.2 — 2026-08-30
+## 0.9.2 -- 2026-08-30
 
 Closed the three biggest gaps against `scorium-rs`'s tooling.
 
@@ -21,7 +21,7 @@ Closed the three biggest gaps against `scorium-rs`'s tooling.
   TypeScript source via Node's native type-stripping, same as the rest of
   the package.
 
-## 0.9.1 — 2026-08-30
+## 0.9.1 -- 2026-08-30
 
 Updated the implementation to stable Scorium language version `0.2.0` and
 vendored its 34-fixture conformance corpus. The conformance runner now applies
@@ -35,7 +35,7 @@ flow, a node body, or an included file propagates to the active function.
 GitHub Releases now use the matching section of this changelog as their
 release body and fail safely when the version section is missing or empty.
 
-## 0.9.0 — 2026-08-30
+## 0.9.0 -- 2026-08-30
 
 First published release, to npm as `scorium`. Dropped the `-dev` suffix
 this version carried during development -- npm refuses to publish a
@@ -77,7 +77,7 @@ on the registry, matches the language name directly, already what
 31/31 conformance fixtures still pass, both from the vendored copy and
 against a live `scorium-spec` checkout via the override.
 
-## 0.8.0-dev — unreleased
+## 0.8.0-dev -- unreleased
 
 The host function/value registry (scorium-spec §6's "one registry,
 multiple surfaces"): `evaluate(doc, { hostFunctions, hostValues })`.
@@ -101,7 +101,7 @@ no fixture exercises this path). The language core, including every
 identifier-resolution step, is now complete; only `script {}`
 execution remains, gated on scorium-spec §7.
 
-## 0.7.0-dev — unreleased
+## 0.7.0-dev -- unreleased
 
 Sandbox resource limits (scorium-spec §3/§6): a total loop-iteration
 budget shared across the whole evaluation and a function call-depth
@@ -125,7 +125,7 @@ the limits it exercises actually exist (confirmed: still under a
 second to run the whole suite). The full non-Lua language core is
 implemented.
 
-## 0.6.0-dev — unreleased
+## 0.6.0-dev -- unreleased
 
 The canonical formatter (`scorium-spec §4`): comment/blank-line trivia
 now tracked through the lexer and parser (previously discarded
@@ -152,7 +152,7 @@ either misparsing or silently succeeding.
 23/23 -- the `formatter/` category is now run). The entire non-Lua
 language core, including the formatter, is implemented.
 
-## 0.5.0-dev — unreleased
+## 0.5.0-dev -- unreleased
 
 `include`: file reading, cycle detection, and path-containment policy
 per `scorium-spec §6` -- canonicalize (resolve symlinks) both the
@@ -167,7 +167,7 @@ multi-file support, now run for real). The entire non-Lua language
 core is implemented; remaining work is the formatter, the rest of the
 diagnostic catalog, and sandbox resource limits.
 
-## 0.4.0-dev — unreleased
+## 0.4.0-dev -- unreleased
 
 Member/method calls (`primary.darken(1.0)`) and, discovered while
 verifying the `color-darken-method` fixture, identifier resolution
@@ -179,13 +179,13 @@ since the fixture genuinely needed both.
 21/21 runnable `scorium-spec` conformance fixtures now pass (up from
 20/21) -- the entire non-Lua language core except `include` is done.
 
-## 0.3.0-dev — unreleased
+## 0.3.0-dev -- unreleased
 
 Control flow (`if`/`elseif`/`else`, numeric `for` with optional step,
 `while`), `local` + leaf-reassignment, `fn` definitions, and calls
 (statement- and expression-position). Reassignment correctly excludes
 function parameters and `for` loop variables (only a genuine `local`
-is reassignable via `n = n + 1`) — verified against a real
+is reassignable via `n = n + 1`) -- verified against a real
 `scorium-rust` edge case where a leaf name colliding with a fn
 parameter must still emit, not silently vanish.
 
@@ -193,7 +193,7 @@ parameter must still emit, not silently vanish.
 16/21); the one failure needs member/method calls (`color.darken()`),
 the last missing postfix-expression form.
 
-## 0.2.0-dev — unreleased
+## 0.2.0-dev -- unreleased
 
 Variables (`@name`) and full expressions: arithmetic (checked `Int`
 overflow, `Int`/`Int` division always `Float`, Euclidean `%`),
@@ -208,11 +208,11 @@ operator errors when squeezed) and the `dollar_in_expression` /
 8/8 `values/`-only); the 5 failures are all control-flow/function/
 method-call fixtures, explicitly still out of scope (see README.md).
 
-## 0.1.0-dev — unreleased
+## 0.1.0-dev -- unreleased
 
 Initial skeleton and first functional slice: lexer, parser, and evaluator
 for the **declarative literal subset only** (nodes, leaves, and the eight
-value types — no variables, expressions/operators, control flow,
+value types -- no variables, expressions/operators, control flow,
 functions, `include`, or `script {}` yet). Verified against the `values/`
 category of `scorium-spec`'s `0.2.0-draft` conformance fixtures (8/8
 passing). Published as a self-contained TypeScript/JavaScript package.
