@@ -27,11 +27,26 @@ export interface SandboxOptions {
 }
 const DEFAULT_SANDBOX: SandboxOptions = { maxLoopIterations: 1_000_000, maxFunctionCallDepth: 256 };
 
+/**
+ * A host function reachable from expressions (`f(a, b)`) exactly like a
+ * Scorium `fn` -- "one registry, multiple surfaces" (scorium-spec §6).
+ * A user-defined `fn` of the same name takes priority (matches
+ * scorium-rust: it checks its own `functions` map before falling back
+ * to the host registry). Throwing inside one is wrapped as
+ * `scorium::eval::type_error`, matching scorium-rust's
+ * `Result<Value, String>` host-function contract.
+ */
+export type HostFunction = (args: Value[]) => Value;
+
 export interface EvalOptions {
   /** Directory relative `include "..."` paths resolve from. Defaults to the current working directory, matching a source with no file of its own. */
   baseDir?: string;
   includePolicy?: Partial<IncludePolicy>;
   sandbox?: Partial<SandboxOptions>;
+  /** Reachable via `f(args)` calls -- identifier-resolution step 4 is host *values*, not functions; see `hostValues`. */
+  hostFunctions?: Record<string, HostFunction>;
+  /** Identifier resolution step 4 (scorium-spec §1): reachable as a plain identifier in expressions, after locals/`@`-vars/sibling-leaves and before the fallback-to-string. */
+  hostValues?: Record<string, Value>;
 }
 
 const I64_MIN_AS_F64 = -9223372036854775808.0;
@@ -59,6 +74,9 @@ interface EvalCtx {
   locals: Frame[];
   /** `fn` definitions: one flat scope (scorium-rust's own model is flat too). */
   functions: Map<string, FnDef>;
+  hostFunctions: Map<string, HostFunction>;
+  /** Identifier resolution step 4 (scorium-spec §1). */
+  hostValues: Map<string, Value>;
   /** Where node/leaf/include entries produced right now are appended -- shared across nested control flow, swapped only when entering a node body. */
   sink: Entry[];
   /** Where relative `include` paths resolve from -- changes to the included file's own directory inside its evaluation (scorium-rust does the same). */
@@ -91,6 +109,8 @@ export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
     atVars: new Map(),
     locals: [new Map()],
     functions: new Map(),
+    hostFunctions: new Map(Object.entries(options.hostFunctions ?? {})),
+    hostValues: new Map(Object.entries(options.hostValues ?? {})),
     sink: [],
     baseDir: options.baseDir ?? process.cwd(),
     includePolicy: { enabled: true, allowParentTraversal: false, ...options.includePolicy },
@@ -140,9 +160,14 @@ function resolveSiblingLeaf(ctx: EvalCtx, name: string): Value | undefined {
   return undefined;
 }
 
-/** Whether `name` resolves to *anything* bindable (steps 1-4 of §1 -- step 4, host values, isn't implemented, so only 1-3 are checked). Used to decide the uncalled-member fallback-to-string rule. */
+/** Whether `name` resolves to anything bindable (steps 1-4 of §1). Used to decide the uncalled-member fallback-to-string rule. */
 function isBound(ctx: EvalCtx, name: string): boolean {
-  return resolveLocal(ctx, name) !== undefined || ctx.atVars.get(name) !== undefined || resolveSiblingLeaf(ctx, name) !== undefined;
+  return (
+    resolveLocal(ctx, name) !== undefined ||
+    ctx.atVars.get(name) !== undefined ||
+    resolveSiblingLeaf(ctx, name) !== undefined ||
+    ctx.hostValues.get(name) !== undefined
+  );
 }
 
 /** §1's leaf-reassignment rule: only a `local` binding is updated in place; a param/loop-var binding of the same name is NOT reassigned (the leaf still emits). Stops at the first (innermost) match either way -- lexical shadowing. */
@@ -335,16 +360,17 @@ function evalExpr(expr: Expr, ctx: EvalCtx): Value {
     case "list":
       return { kind: "list", value: expr.items.map((e) => evalExpr(e, ctx)) };
     case "ident": {
-      // §1 resolution: step 1 (local/param/loop-var), step 2
-      // (@-variable), step 3 (sibling leaf), step 5 (fallback to a
-      // literal string). Step 4 (host value) is not implemented -- no
-      // host registry yet.
+      // §1 resolution, all five steps: local/param/loop-var,
+      // @-variable, sibling leaf, host value, fallback to a literal
+      // string.
       const local = resolveLocal(ctx, expr.name);
       if (local !== undefined) return local;
       const at = ctx.atVars.get(expr.name);
       if (at !== undefined) return at;
       const sibling = resolveSiblingLeaf(ctx, expr.name);
       if (sibling !== undefined) return sibling;
+      const host = ctx.hostValues.get(expr.name);
+      if (host !== undefined) return host;
       return { kind: "string", value: expr.name };
     }
     case "unary":
@@ -385,7 +411,21 @@ function evalCall(callee: Expr, argExprs: Expr[], ctx: EvalCtx): Value {
     throw new EvalError("scorium::eval::type_error: this expression is not callable");
   }
   const fn = ctx.functions.get(callee.name);
-  if (!fn) throw new EvalError(`scorium::eval::unknown_function: unknown function \`${callee.name}\``);
+  if (!fn) {
+    // A Scorium `fn` of the same name takes priority over a host
+    // function -- matches scorium-rust checking its own `functions`
+    // map first, falling back to the host registry.
+    const hostFn = ctx.hostFunctions.get(callee.name);
+    if (hostFn) {
+      const argValues = argExprs.map((a) => evalExpr(a, ctx));
+      try {
+        return hostFn(argValues);
+      } catch (err) {
+        throw new EvalError(`scorium::eval::type_error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    throw new EvalError(`scorium::eval::unknown_function: unknown function \`${callee.name}\``);
+  }
   const argValues = argExprs.map((a) => evalExpr(a, ctx));
   const frame: Frame = new Map();
   fn.params.forEach((p, i) => frame.set(p, { value: argValues[i] ?? NIL, reassignable: false }));
