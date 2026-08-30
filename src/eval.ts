@@ -2,20 +2,36 @@ import { readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 import type { BinOp, Document, Expr, FnDef, Item, UnOp } from "./ast.ts";
 import type { Entry } from "./entry.ts";
+import { EvalError } from "./errors.ts";
 import { parse } from "./parser.ts";
 import { makeInt, type Value } from "./value.ts";
 
-export class EvalError extends Error {}
+export { EvalError };
 
 /** `include` behavior (scorium-spec §6). Matches scorium-rust's `IncludePolicy` defaults. */
 export interface IncludePolicy {
   enabled: boolean;
   allowParentTraversal: boolean;
 }
+
+/**
+ * Required-but-defaults-open resource limits (scorium-spec §3/§6):
+ * existence, configurability, and the error path are normative; these
+ * default values are scorium-rust's own, not independently justified.
+ * Script instruction/memory limits aren't included -- no Lua VM is
+ * embedded, so they don't apply yet.
+ */
+export interface SandboxOptions {
+  maxLoopIterations: number;
+  maxFunctionCallDepth: number;
+}
+const DEFAULT_SANDBOX: SandboxOptions = { maxLoopIterations: 1_000_000, maxFunctionCallDepth: 256 };
+
 export interface EvalOptions {
   /** Directory relative `include "..."` paths resolve from. Defaults to the current working directory, matching a source with no file of its own. */
   baseDir?: string;
   includePolicy?: Partial<IncludePolicy>;
+  sandbox?: Partial<SandboxOptions>;
 }
 
 const I64_MIN_AS_F64 = -9223372036854775808.0;
@@ -50,6 +66,16 @@ interface EvalCtx {
   includePolicy: IncludePolicy;
   /** Canonical paths of includes currently in progress, for cycle detection (scorium-spec §3). */
   includeStack: string[];
+  maxLoopIterations: number;
+  maxFunctionCallDepth: number;
+  /**
+   * Mutable sandbox counters. A plain object, not top-level EvalCtx
+   * fields, so it stays shared by reference through every `{...ctx,
+   * sink: ... }` copy (node bodies, includes) -- the loop budget is
+   * one counter across the *whole* evaluation (scorium-spec §3), not
+   * per-scope.
+   */
+  budget: { loopIterationsUsed: number; callDepth: number };
 }
 
 type Flow = { kind: "normal" } | { kind: "return"; value: Value };
@@ -60,6 +86,7 @@ const NORMAL: Flow = { kind: "normal" };
  * `script {}` -- see README.md "Current scope".
  */
 export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
+  const sandbox = { ...DEFAULT_SANDBOX, ...options.sandbox };
   const ctx: EvalCtx = {
     atVars: new Map(),
     locals: [new Map()],
@@ -68,6 +95,9 @@ export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
     baseDir: options.baseDir ?? process.cwd(),
     includePolicy: { enabled: true, allowParentTraversal: false, ...options.includePolicy },
     includeStack: [],
+    maxLoopIterations: sandbox.maxLoopIterations,
+    maxFunctionCallDepth: sandbox.maxFunctionCallDepth,
+    budget: { loopIterationsUsed: 0, callDepth: 0 },
   };
   evalItems(doc.items, ctx);
   return ctx.sink;
@@ -182,6 +212,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
       const stepN = item.step ? requireNumber(evalExpr(item.step, ctx)) : 1;
       if (stepN === 0) throw new EvalError("scorium::eval::type_error: a `for` step of 0 is invalid");
       for (let i = startN; stepN > 0 ? i <= stopN : i >= stopN; i += stepN) {
+        checkLoopBudget(ctx);
         const loopVal: Value = Number.isInteger(i) ? makeInt(BigInt(i)) : { kind: "float", value: i };
         ctx.locals.push(new Map([[item.varName, { value: loopVal, reassignable: false }]]));
         const flow = evalItems(item.body, ctx);
@@ -192,6 +223,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
     }
     case "while": {
       while (isTruthy(evalExpr(item.cond, ctx))) {
+        checkLoopBudget(ctx);
         const flow = evalBlockScoped(item.body, ctx);
         if (flow.kind === "return") return flow;
       }
@@ -262,6 +294,16 @@ function execInclude(pathStr: string, ctx: EvalCtx): void {
   ctx.sink.push({ kind: "include", path: pathStr });
   const childCtx: EvalCtx = { ...ctx, baseDir: dirname(resolved), includeStack: [...ctx.includeStack, canonical] };
   evalItems(includedDoc.items, childCtx); // shares ctx.sink/atVars/locals/functions by reference -- merges into the includer
+}
+
+/** Total for/while iterations allowed across one whole evaluation (scorium-spec §3), not per-loop. */
+function checkLoopBudget(ctx: EvalCtx): void {
+  ctx.budget.loopIterationsUsed++;
+  if (ctx.budget.loopIterationsUsed > ctx.maxLoopIterations) {
+    throw new EvalError(
+      `scorium::eval::loop_budget_exceeded: loop budget exceeded (${ctx.maxLoopIterations} iterations); this program may not terminate`,
+    );
+  }
 }
 
 function requireNumber(v: Value): number {
@@ -347,10 +389,22 @@ function evalCall(callee: Expr, argExprs: Expr[], ctx: EvalCtx): Value {
   const argValues = argExprs.map((a) => evalExpr(a, ctx));
   const frame: Frame = new Map();
   fn.params.forEach((p, i) => frame.set(p, { value: argValues[i] ?? NIL, reassignable: false }));
+
+  ctx.budget.callDepth++;
+  if (ctx.budget.callDepth > ctx.maxFunctionCallDepth) {
+    throw new EvalError(
+      `scorium::eval::call_depth_exceeded: function call depth exceeded (${ctx.maxFunctionCallDepth}); this function may recurse forever`,
+    );
+  }
   ctx.locals.push(frame);
-  const flow = evalItems(fn.body, ctx); // entries the body produces land in the caller's current ctx.sink, same as a for/while body would
-  ctx.locals.pop();
-  return flow.kind === "return" ? flow.value : NIL;
+  try {
+    // entries the body produces land in the caller's current ctx.sink, same as a for/while body would
+    const flow = evalItems(fn.body, ctx);
+    return flow.kind === "return" ? flow.value : NIL;
+  } finally {
+    ctx.locals.pop();
+    ctx.budget.callDepth--;
+  }
 }
 
 const COLOR_METHODS = new Set(["darken", "lighten", "alpha"]);

@@ -1,5 +1,8 @@
 import type { BarePart } from "./ast.ts";
+import { LexError } from "./errors.ts";
 import type { Token, TokenKind } from "./token.ts";
+
+export { LexError };
 
 /**
  * Lexer for scorium-spec §1. Two context-sensitive rules, both tracked
@@ -14,8 +17,6 @@ import type { Token, TokenKind } from "./token.ts";
  *   operator (`* / % == ~= < > <= >=`) is a `squeezed_operator` lex
  *   error when it has no whitespace on either side (`base*2`).
  */
-export class LexError extends Error {}
-
 const DURATION_UNITS = ["ms", "s", "m"];
 
 function isIdentStart(ch: string | undefined): boolean {

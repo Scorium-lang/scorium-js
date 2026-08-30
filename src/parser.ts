@@ -1,8 +1,9 @@
 import type { BinOp, Comment, Document, Expr, HeaderValue, Item } from "./ast.ts";
+import { ParseError } from "./errors.ts";
 import { Lexer } from "./lexer.ts";
 import type { Token, TokenKind } from "./token.ts";
 
-export class ParseError extends Error {}
+export { ParseError };
 
 export function parse(src: string): Document {
   const tokens = new Lexer(src).tokenize();
