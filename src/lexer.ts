@@ -78,6 +78,7 @@ const VALUE_ENDS = new Set<TokenKind>([
   "for",
   "local",
   "fn",
+  "dot",
 ]);
 
 export class Lexer {
@@ -181,6 +182,10 @@ export class Lexer {
     if (ch === ",") {
       this.pos++;
       return this.push("comma", {}, start);
+    }
+    if (ch === ".") {
+      this.pos++;
+      return this.push("dot", {}, start);
     }
     if (ch === "@") {
       this.pos++;

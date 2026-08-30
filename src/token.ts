@@ -18,6 +18,7 @@ export type TokenKind =
   | "lparen"
   | "rparen"
   | "comma"
+  | "dot"
   | "at"
   | "plus"
   | "minus"
