@@ -75,6 +75,20 @@ function resolveLocal(ctx: EvalCtx, name: string): Value | undefined {
   return undefined;
 }
 
+/** §1 resolution step 3: a leaf emitted earlier in the *same* body (ctx.sink is swapped per node body, so this never reaches into an enclosing/ancestor body). Most recent match wins if a key repeats. */
+function resolveSiblingLeaf(ctx: EvalCtx, name: string): Value | undefined {
+  for (let idx = ctx.sink.length - 1; idx >= 0; idx--) {
+    const entry = ctx.sink[idx]!;
+    if (entry.kind === "leaf" && entry.key === name) return entry.value;
+  }
+  return undefined;
+}
+
+/** Whether `name` resolves to *anything* bindable (steps 1-4 of §1 -- step 4, host values, isn't implemented, so only 1-3 are checked). Used to decide the uncalled-member fallback-to-string rule. */
+function isBound(ctx: EvalCtx, name: string): boolean {
+  return resolveLocal(ctx, name) !== undefined || ctx.atVars.get(name) !== undefined || resolveSiblingLeaf(ctx, name) !== undefined;
+}
+
 /** §1's leaf-reassignment rule: only a `local` binding is updated in place; a param/loop-var binding of the same name is NOT reassigned (the leaf still emits). Stops at the first (innermost) match either way -- lexical shadowing. */
 function setLocalIfExists(ctx: EvalCtx, name: string, value: Value): boolean {
   for (let idx = ctx.locals.length - 1; idx >= 0; idx--) {
@@ -178,27 +192,57 @@ function evalExpr(expr: Expr, ctx: EvalCtx): Value {
     case "list":
       return { kind: "list", value: expr.items.map((e) => evalExpr(e, ctx)) };
     case "ident": {
-      // §1 resolution: step 1 (local/param/loop-var), step 2 (@-variable),
-      // step 5 (fallback to a literal string). Steps 3/4 (sibling leaf,
-      // host value) are not implemented.
+      // §1 resolution: step 1 (local/param/loop-var), step 2
+      // (@-variable), step 3 (sibling leaf), step 5 (fallback to a
+      // literal string). Step 4 (host value) is not implemented -- no
+      // host registry yet.
       const local = resolveLocal(ctx, expr.name);
       if (local !== undefined) return local;
       const at = ctx.atVars.get(expr.name);
       if (at !== undefined) return at;
+      const sibling = resolveSiblingLeaf(ctx, expr.name);
+      if (sibling !== undefined) return sibling;
       return { kind: "string", value: expr.name };
     }
     case "unary":
       return evalUnary(expr.op, evalExpr(expr.operand, ctx));
     case "binary":
       return evalBinary(expr.op, expr.left, expr.right, ctx);
+    case "member":
+      return evalMember(expr.base, expr.field, ctx);
     case "call":
-      return evalCall(expr.name, expr.args, ctx);
+      return evalCall(expr.callee, expr.args, ctx);
   }
 }
 
-function evalCall(name: string, argExprs: Expr[], ctx: EvalCtx): Value {
-  const fn = ctx.functions.get(name);
-  if (!fn) throw new EvalError(`scorium::eval::unknown_function: unknown function \`${name}\``);
+/**
+ * `base.field`, uncalled. §1: if `base` isn't a real binding, the whole
+ * `base.field` was always just a literal string (this is how dotted
+ * bare strings like `cert.pem` work). If `base` *is* a real binding,
+ * bare field access still isn't supported -- only a call
+ * (`.field(...)`) is; see evalCall's member-callee branch.
+ */
+function evalMember(base: Expr, field: string, ctx: EvalCtx): Value {
+  if (base.type === "ident" && !isBound(ctx, base.name)) {
+    return { kind: "string", value: `${base.name}.${field}` };
+  }
+  const baseVal = evalExpr(base, ctx);
+  throw new EvalError(
+    `scorium::eval::type_error: ${baseVal.kind} has no field \`${field}\` (only method calls like \`.${field}(...)\` are supported)`,
+  );
+}
+
+function evalCall(callee: Expr, argExprs: Expr[], ctx: EvalCtx): Value {
+  if (callee.type === "member") {
+    const baseVal = evalExpr(callee.base, ctx);
+    const argValues = argExprs.map((a) => evalExpr(a, ctx));
+    return callMethod(baseVal, callee.field, argValues);
+  }
+  if (callee.type !== "ident") {
+    throw new EvalError("scorium::eval::type_error: this expression is not callable");
+  }
+  const fn = ctx.functions.get(callee.name);
+  if (!fn) throw new EvalError(`scorium::eval::unknown_function: unknown function \`${callee.name}\``);
   const argValues = argExprs.map((a) => evalExpr(a, ctx));
   const frame: Frame = new Map();
   fn.params.forEach((p, i) => frame.set(p, { value: argValues[i] ?? NIL, reassignable: false }));
@@ -206,6 +250,37 @@ function evalCall(name: string, argExprs: Expr[], ctx: EvalCtx): Value {
   const flow = evalItems(fn.body, ctx); // entries the body produces land in the caller's current ctx.sink, same as a for/while body would
   ctx.locals.pop();
   return flow.kind === "return" ? flow.value : NIL;
+}
+
+const COLOR_METHODS = new Set(["darken", "lighten", "alpha"]);
+
+/** Color's three methods (scorium-spec §2) -- the only value type with methods. */
+function callMethod(base: Value, field: string, args: Value[]): Value {
+  if (base.kind !== "color") {
+    throw new EvalError(`scorium::eval::type_error: ${base.kind} has no method \`${field}\``);
+  }
+  if (!COLOR_METHODS.has(field)) {
+    throw new EvalError(`scorium::eval::type_error: color has no method \`${field}\``);
+  }
+  if (args.length !== 1) {
+    throw new EvalError(`scorium::eval::type_error: color.${field}() expects exactly one numeric argument`);
+  }
+  const amount = numberOf(args[0]!);
+  if (amount === undefined) {
+    throw new EvalError(`scorium::eval::type_error: color.${field}() expects a number, found ${args[0]!.kind}`);
+  }
+  const clamped = Math.min(1, Math.max(0, amount));
+  const round = (n: number) => Math.round(n);
+  if (field === "darken") {
+    const scale = 1 - clamped;
+    return { kind: "color", r: round(base.r * scale), g: round(base.g * scale), b: round(base.b * scale), a: base.a };
+  }
+  if (field === "lighten") {
+    const mix = (c: number) => round(c + (255 - c) * clamped);
+    return { kind: "color", r: mix(base.r), g: mix(base.g), b: mix(base.b), a: base.a };
+  }
+  // alpha
+  return { kind: "color", r: base.r, g: base.g, b: base.b, a: round(clamped * 255) };
 }
 
 function evalBareParts(parts: Array<{ kind: "lit"; text: string } | { kind: "interp"; name: string }>, ctx: EvalCtx): string {
