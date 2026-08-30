@@ -111,7 +111,7 @@ class Parser {
       return { type: "leaf", key: nameTok.text, value };
     }
     if (next.kind === "lparen") {
-      return { type: "exprstmt", expr: this.parseCallArgs(nameTok.text) };
+      return { type: "exprstmt", expr: this.parseCallArgs({ type: "ident", name: nameTok.text }) };
     }
 
     let header: HeaderValue | null = null;
@@ -192,8 +192,8 @@ class Parser {
     return { type: "fndef", name: nameTok.text, params, body };
   }
 
-  /** Assumes `lparen` is the next token (the callee name has already been consumed). */
-  private parseCallArgs(name: string): Expr {
+  /** Assumes `lparen` is the next token (the callee has already been parsed). */
+  private parseCallArgs(callee: Expr): Expr {
     this.expect("lparen");
     const args: Expr[] = [];
     if (this.peek().kind !== "rparen") {
@@ -204,7 +204,7 @@ class Parser {
       }
     }
     this.expect("rparen");
-    return { type: "call", name, args };
+    return { type: "call", callee, args };
   }
 
   private parseHeader(): HeaderValue {
@@ -302,7 +302,26 @@ class Parser {
     return this.parsePrimary();
   }
 
+  /** primary { call_suffix | member_suffix } -- postfix chain on top of one atom. */
   private parsePrimary(): Expr {
+    let expr = this.parseAtom();
+    for (;;) {
+      if (this.peek().kind === "dot") {
+        this.advance();
+        const field = this.expect("ident").text;
+        expr = { type: "member", base: expr, field };
+        continue;
+      }
+      if (this.peek().kind === "lparen") {
+        expr = this.parseCallArgs(expr);
+        continue;
+      }
+      break;
+    }
+    return expr;
+  }
+
+  private parseAtom(): Expr {
     const tok = this.peek();
     switch (tok.kind) {
       case "int":
@@ -329,11 +348,9 @@ class Parser {
       case "barestr":
         this.advance();
         return { type: "str", lit: { kind: "bare", parts: tok.bareParts! } };
-      case "ident": {
+      case "ident":
         this.advance();
-        if (this.peek().kind === "lparen") return this.parseCallArgs(tok.text);
         return { type: "ident", name: tok.text };
-      }
       case "lbracket":
         return this.parseList();
       case "lparen": {
