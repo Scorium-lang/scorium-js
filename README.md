@@ -14,10 +14,7 @@ ordinary configuration declarative while allowing expressions, conditions,
 loops, and functions when static data is not enough. **scorium-js is its
 native TypeScript/JavaScript implementation.** It exposes the shared,
 versioned Scorium language contract through idiomatic APIs for JavaScript and
-TypeScript applications. Rust, JavaScript/TypeScript, and future supported
-languages are peer implementations; compatibility comes from the same
-specification and conformance fixtures, not from one implementation wrapping
-another.
+TypeScript applications.
 
 ```scor
 @base_port = 8000
