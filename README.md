@@ -38,27 +38,30 @@ sandbox). **Implemented so far:**
   never casts the integer through `f64` first), logic (`and`/`or`
   short-circuiting, `not`), unary negation, and grouping parens.
 - Identifier resolution steps 1 (local/param/loop-var), 2 (`@`-variable),
-  and 5 (fallback to a literal string) of `scorium-spec §1`'s 5-step
-  order.
+  3 (sibling leaf — a leaf emitted earlier in the *same* body), and 5
+  (fallback to a literal string) of `scorium-spec §1`'s 5-step order.
 - Control flow (`if`/`elseif`/`else`, numeric `for` with optional step,
   `while`), `local` and the leaf-reassignment rule (`n = n + 1` updates
   an existing `local`, but — confirmed against a real `scorium-rust`
   test — does *not* apply to a `fn` parameter of the same name; that
   case still emits a leaf), `fn` definitions, and calls (statement- and
-  expression-position, plain-identifier callees only).
+  expression-position, plain-identifier or member callees).
+- Member/method calls (`primary.darken(1.0)`) — the color methods
+  (`darken`/`lighten`/`alpha`), the only value type with methods.
 - The `squeezed_operator`, `at_in_expression`, and `dollar_in_expression`
   lex/parse diagnostics, and the `undefined_interpolation`,
   `arithmetic_overflow`, and `unknown_function` eval diagnostics (by
   message content, not yet a structured error type — see below).
 
+**21/21 runnable `scorium-spec` conformance fixtures pass** (see
+"Conformance" below) — the entire non-Lua language core except
+`include` is implemented.
+
 **Not yet implemented** (deferred, not silently unsupported — anything
 outside this should be treated as "not yet built," not "not part of the
 language"):
 
-- Identifier resolution step 3 (sibling leaves); step 4 (host values) has
-  no host registry yet either.
-- Member/method calls (`color.darken(...)`) — the only remaining
-  postfix-expression form.
+- Identifier resolution step 4 (host values) — no host registry yet.
 - `include`.
 - `script {}` / Lua (the Full-conformance-level question from
   `scorium-spec §7`, itself still unapproved — not started either way).
@@ -75,9 +78,9 @@ language"):
 (relative sibling checkout — only works when `scorium-spec` is checked
 out alongside this repo, e.g. both under `scorium-lang/`). `formatter/`
 and `sandbox/` are skipped entirely (no formatter, no resource limits
-yet); multi-file (`include`) fixtures are skipped individually. 20/21
-runnable fixtures pass — the one failure needs member/method calls,
-still out of scope; that's accurate signal, not a bug to silence.
+yet); multi-file (`include`) fixtures are skipped individually (2 —
+both need `include`, the only remaining gap). 21/21 of everything else
+passes.
 
 ## Requirements
 

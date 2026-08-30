@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0-dev — unreleased
+
+Member/method calls (`primary.darken(1.0)`) and, discovered while
+verifying the `color-darken-method` fixture, identifier resolution
+step 3 (sibling-leaf reference) -- `primary` in that fixture isn't a
+variable, it's the leaf set two lines above, which the earlier
+"steps 1/2/5 only" resolution couldn't reach. Both landed together
+since the fixture genuinely needed both.
+
+21/21 runnable `scorium-spec` conformance fixtures now pass (up from
+20/21) -- the entire non-Lua language core except `include` is done.
+
 ## 0.3.0-dev — unreleased
 
 Control flow (`if`/`elseif`/`else`, numeric `for` with optional step,
