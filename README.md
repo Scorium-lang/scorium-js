@@ -23,38 +23,55 @@ release independently).
 
 This is a staged build, following the same order `scorium-spec` itself
 was drafted in (grammar → values → evaluation → formatter → diagnostics →
-sandbox). **Implemented so far:** lexing, parsing, and evaluating the
-*declarative* surface only — nodes (with optional headers), leaves, and
-all eight value types (`Int`, `Float`, `Bool`, `Nil`, `Str`, `Color`,
-`Duration`, `List`), with `Int` backed by `bigint` to satisfy
-`scorium-spec §2`'s exact-representation requirement (a `number` cannot
-carry the full 64-bit signed range exactly).
+sandbox). **Implemented so far:**
+
+- The declarative surface: nodes (with optional headers), leaves, and
+  all eight value types (`Int`, `Float`, `Bool`, `Nil`, `Str`, `Color`,
+  `Duration`, `List`), with `Int` backed by `bigint` to satisfy
+  `scorium-spec §2`'s exact-representation requirement.
+- `@`-variables and `$`-interpolation in bare strings, including the
+  undefined-interpolation error (no fallback for `$name`, unlike a plain
+  identifier).
+- Full expressions: arithmetic (`+ - * / %`, checked `Int` overflow,
+  `Int`/`Int` division always `Float`, `%` as pure Euclidean remainder),
+  comparison (`== ~= < > <= >=`, with exact `Int`/`Float` ordering that
+  never casts the integer through `f64` first), logic (`and`/`or`
+  short-circuiting, `not`), unary negation, and grouping parens.
+- Identifier resolution steps 2 (`@`-variable) and 5 (fallback to a
+  literal string) of `scorium-spec §1`'s 5-step order.
+- The `squeezed_operator`, `at_in_expression`, and `dollar_in_expression`
+  lex/parse diagnostics, and the `undefined_interpolation` and
+  `arithmetic_overflow` eval diagnostics (by message content, not yet a
+  structured error type — see below).
 
 **Not yet implemented** (deferred, not silently unsupported — anything
-outside the literal subset should be treated as "not yet built," not "not
-part of the language"):
+outside this should be treated as "not yet built," not "not part of the
+language"):
 
-- `@`-variables, `$`-interpolation, sibling-leaf resolution, host values —
-  bare identifiers currently only ever hit the fallback-to-literal-string
-  rule (§1/§3's resolution steps 1–4 are not implemented; only step 5 is).
-- Expressions with operators, comparisons, unary negation.
-- Control flow (`if`/`elseif`/`else`, `for`, `while`), `local`, `fn`.
+- Identifier resolution steps 1 (locals/params/loop vars) and 3 (sibling
+  leaves) — no locals, no loops, so nothing to resolve yet; step 4 (host
+  values) has no host registry yet either.
+- Control flow (`if`/`elseif`/`else`, `for`, `while`), `local`, `fn`,
+  member/method calls (`color.darken(...)`), and general function calls.
 - `include`.
-- `script {}` / Lua (this is the Full-conformance-level question from
+- `script {}` / Lua (the Full-conformance-level question from
   `scorium-spec §7`, itself still unapproved — not started either way).
 - The canonical formatter (`scorium-spec §4`).
-- The full diagnostic code catalog (`scorium-spec §5`) — errors thrown
-  today are plain `Error`s, not yet tagged with `scorium::*` codes.
+- The rest of the diagnostic code catalog (`scorium-spec §5`) — errors
+  thrown today are plain `Error`s with the `scorium::*` code embedded in
+  the message text, not yet a structured, catchable error type per code.
 - Sandbox resource limits (`scorium-spec §6`).
 
 ## Conformance
 
 `npm run conformance` runs `scripts/conformance.ts` against
-`../scorium-spec/conformance/0.2.0-draft/values/*.json` (relative sibling
-checkout — this only works when `scorium-spec` is checked out alongside
-this repo, e.g. both under `scorium-lang/`). Only the `values/` fixture
-category is in scope right now, for the reason above: every other
-category exercises language features this build doesn't have yet.
+`../scorium-spec/conformance/v0.2.0-draft/{values,evaluation,diagnostics}/`
+(relative sibling checkout — only works when `scorium-spec` is checked
+out alongside this repo, e.g. both under `scorium-lang/`). `formatter/`
+and `sandbox/` are skipped entirely (no formatter, no resource limits
+yet); multi-file (`include`) fixtures are skipped individually. Fixtures
+needing control flow, functions, or method calls are expected to fail
+until those land — that's accurate signal, not a bug to silence.
 
 ## Requirements
 
