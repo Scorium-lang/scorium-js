@@ -144,7 +144,11 @@ jobs:
             exit 1
           fi
 
-          if tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq .object.sha 2>/dev/null)"; then
+          # The commits endpoint peels both lightweight and annotated tags to
+          # their underlying commit. Comparing the raw Git ref object would
+          # incorrectly reject an annotated tag because its object SHA is the
+          # tag object's SHA, not the release commit's SHA.
+          if tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${tag}" --jq .sha 2>/dev/null)"; then
             if [ "$tag_sha" != "$GITHUB_SHA" ]; then
               echo "Refusing to release: $tag already points to $tag_sha, not $GITHUB_SHA." >&2
               exit 1
