@@ -80,6 +80,7 @@ const VALUE_ENDS = new Set<TokenKind>([
   "local",
   "fn",
   "dot",
+  "rawscript",
 ]);
 
 export class Lexer {
@@ -87,6 +88,8 @@ export class Lexer {
   private pos = 0;
   private expectValue = false;
   private bracketDepth = 0;
+  /** Set right after emitting a `script` token; the next `next()` call raw-captures the `{ ... }` body instead of tokenizing normally. */
+  private pendingScriptBody = false;
 
   constructor(src: string) {
     this.src = src;
@@ -130,6 +133,10 @@ export class Lexer {
   }
 
   private next(): Token {
+    if (this.pendingScriptBody) {
+      this.pendingScriptBody = false;
+      return this.lexScriptBody();
+    }
     this.skipTrivia();
     const start = this.pos;
     if (this.pos >= this.src.length) return this.push("eof", {}, start);
@@ -140,6 +147,15 @@ export class Lexer {
       this.pos++;
       if (this.bracketDepth > 0) return this.next();
       return this.push("newline", {}, start);
+    }
+    // Comments must be checked before `#` (color) and `-` (minus) so a
+    // real `--comment` or a `#`-as-comment isn't split into operator/
+    // color tokens. Emitted as real tokens (not skipped) so the parser
+    // can attach them as formatter trivia.
+    if (ch === "#" && !this.expectValue) return this.lexLineComment(start, 1);
+    if (ch === "-" && this.src[start + 1] === "-") {
+      if (this.src[start + 2] === "[" && this.src[start + 3] === "[") return this.lexBlockComment(start);
+      return this.lexLineComment(start, 2);
     }
     if (ch === "=" && this.src[start + 1] === "=") return this.pushOperator("eqeq", 2, start, true);
     if (ch === "=") {
@@ -203,30 +219,53 @@ export class Lexer {
     throw new LexError(`scorium::lex::unexpected_char: unexpected character ${JSON.stringify(ch)} at offset ${start}`);
   }
 
-  /** Skips whitespace (not newlines) and comments; `#` here is only ever a comment, since a value-position `#` is handled by `next()` before this runs. */
+  /** Whitespace only (not newlines, not comments -- comments are real tokens, see `next()`). */
   private skipTrivia(): void {
-    for (;;) {
-      const ch = this.src[this.pos];
-      if (ch === " " || ch === "\t" || ch === "\r") {
-        this.pos++;
-        continue;
-      }
-      if (ch === "#" && !this.expectValue) {
-        while (this.pos < this.src.length && this.src[this.pos] !== "\n") this.pos++;
-        continue;
-      }
-      if (ch === "-" && this.src[this.pos + 1] === "-") {
-        if (this.src[this.pos + 2] === "[" && this.src[this.pos + 3] === "[") {
-          const close = this.src.indexOf("]]", this.pos + 4);
-          if (close === -1) throw new LexError("scorium::lex::unterminated_comment: unterminated block comment");
-          this.pos = close + 2;
-          continue;
-        }
-        while (this.pos < this.src.length && this.src[this.pos] !== "\n") this.pos++;
-        continue;
-      }
-      break;
+    while (this.src[this.pos] === " " || this.src[this.pos] === "\t" || this.src[this.pos] === "\r") this.pos++;
+  }
+
+  /** `#...` or `--...` to end of line. `prefixLen` is 1 for `#`, 2 for `--`. Canonical rendering always normalizes to `#` (scorium-spec §4) -- that's the formatter's job, not the lexer's; this token just carries the raw text after the prefix. */
+  private lexLineComment(start: number, prefixLen: number): Token {
+    this.pos = start + prefixLen;
+    while (this.pos < this.src.length && this.src[this.pos] !== "\n") this.pos++;
+    return this.push("comment", { commentText: this.src.slice(start + prefixLen, this.pos), commentBlock: false }, start);
+  }
+
+  /**
+   * `script { raw_lua_text }` -- captured verbatim from raw source
+   * (never tokenized as Scorium, never reformatted; scorium-spec §1),
+   * by naive brace-depth counting. Known limitation, not exercised by
+   * any fixture: this doesn't understand Lua's own string/comment
+   * syntax, so a `{`/`}` inside a Lua string or comment would miscount
+   * -- scorium-rust's own lexer is more careful here.
+   */
+  private lexScriptBody(): Token {
+    while (/\s/.test(this.src[this.pos] ?? "")) this.pos++;
+    const start = this.pos;
+    if (this.src[this.pos] !== "{") {
+      throw new LexError(`scorium::parse::unexpected_token: expected '{' after 'script', found ${JSON.stringify(this.src[this.pos] ?? "eof")} at offset ${this.pos}`);
     }
+    this.pos++;
+    const bodyStart = this.pos;
+    let depth = 1;
+    while (this.pos < this.src.length && depth > 0) {
+      const ch = this.src[this.pos];
+      if (ch === "{") depth++;
+      else if (ch === "}") depth--;
+      if (depth > 0) this.pos++;
+    }
+    if (depth !== 0) throw new LexError("scorium::parse::unexpected_eof: unterminated script block");
+    const raw = this.src.slice(bodyStart, this.pos);
+    this.pos++; // consume the closing '}'
+    return this.push("rawscript", { scriptRaw: raw }, start);
+  }
+
+  private lexBlockComment(start: number): Token {
+    const close = this.src.indexOf("]]", start + 4);
+    if (close === -1) throw new LexError("scorium::lex::unterminated_comment: unterminated block comment");
+    const text = this.src.slice(start + 4, close);
+    this.pos = close + 2;
+    return this.push("comment", { commentText: text, commentBlock: true }, start);
   }
 
   private lexQuotedString(start: number): Token {
@@ -368,6 +407,10 @@ export class Lexer {
     if (text === "return") return this.push("return", {}, start);
     if (text === "fn") return this.push("fn", {}, start);
     if (text === "include") return this.push("include", {}, start);
+    if (text === "script") {
+      this.pendingScriptBody = true;
+      return this.push("script", {}, start);
+    }
     return this.push("ident", {}, start);
   }
 }
