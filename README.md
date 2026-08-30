@@ -51,14 +51,26 @@ sandbox). **Implemented so far:**
 - `include`, with path containment enforced on the canonicalized
   (symlink-resolved) path per `scorium-spec §6` — not just a textual
   `..`/absolute-path check — and cycle detection.
+- The canonical formatter (`scorium-spec §4`): comment preservation
+  (leading + same-line trailing, item granularity; `--` normalizes to
+  `#`), blank-line capping to one, precedence-driven re-parenthesization,
+  and the `Int`/`Float`/duration literal-formatting rules. Verified
+  byte-for-byte against real `scorium-rust` canonical output for
+  constructs the JSON fixtures don't directly cover (`for`, `if`/`else`,
+  `fn`, `include`).
+- `script { ... }` is parsed and formatted correctly (raw-captured
+  verbatim, never reformatted) but **not executable** — evaluating one
+  raises a clear, explicit error rather than silently no-op'ing or (the
+  bug this caught during development) accidentally misparsing the body
+  as ordinary Scorium items. See "Not yet implemented" below.
 - The `squeezed_operator`, `at_in_expression`, and `dollar_in_expression`
   lex/parse diagnostics, and the `undefined_interpolation`,
   `arithmetic_overflow`, `unknown_function`, `includes_disabled`,
-  `include_path_denied`, `include_cycle`, `include_io`, and
-  `include_parse` eval diagnostics (by message content, not yet a
-  structured error type — see below).
+  `include_path_denied`, `include_cycle`, `include_io`, `include_parse`,
+  and `script_error` (script execution attempted) eval diagnostics (by
+  message content, not yet a structured error type — see below).
 
-**23/23 runnable `scorium-spec` conformance fixtures pass** (see
+**29/29 runnable `scorium-spec` conformance fixtures pass** (see
 "Conformance" below) — the entire non-Lua language core is implemented.
 
 **Not yet implemented** (deferred, not silently unsupported — anything
@@ -66,9 +78,9 @@ outside this should be treated as "not yet built," not "not part of the
 language"):
 
 - Identifier resolution step 4 (host values) — no host registry yet.
-- `script {}` / Lua (the Full-conformance-level question from
-  `scorium-spec §7`, itself still unapproved — not started either way).
-- The canonical formatter (`scorium-spec §4`).
+- `script {}` *execution* — no Lua VM embedded (the Full-conformance-level
+  question from `scorium-spec §7`, itself still unapproved). Parsing and
+  formatting a document containing one already works (see above).
 - The rest of the diagnostic code catalog (`scorium-spec §5`) — errors
   thrown today are plain `Error`s with the `scorium::*` code embedded in
   the message text, not yet a structured, catchable error type per code.
@@ -77,12 +89,11 @@ language"):
 ## Conformance
 
 `npm run conformance` runs `scripts/conformance.ts` against
-`../scorium-spec/conformance/v0.2.0-draft/{values,evaluation,diagnostics}/`
+`../scorium-spec/conformance/v0.2.0-draft/{values,evaluation,diagnostics,formatter}/`
 (relative sibling checkout — only works when `scorium-spec` is checked
 out alongside this repo, e.g. both under `scorium-lang/`), including
 multi-file `include` fixtures (written to a scratch temp directory per
-fixture). `formatter/` and `sandbox/` aren't run yet (no formatter, no
-resource limits). **23/23 passes.**
+fixture). **29/29 passes.**
 
 Running `sandbox/`'s fixtures today would be actively harmful, not just
 unsupported: `sandbox/loop-budget-exceeded.json`'s `while true do ...`

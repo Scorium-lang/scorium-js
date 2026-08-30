@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.0-dev — unreleased
+
+The canonical formatter (`scorium-spec §4`): comment/blank-line trivia
+now tracked through the lexer and parser (previously discarded
+entirely), precedence-driven expression printing, and the literal-
+formatting rules. Verified byte-for-byte against real `scorium-rust`
+canonical output beyond the JSON fixtures (`for`, `if`/`else`, `fn`,
+`include`) -- that check caught and fixed a real bug where a blank
+line immediately after the *first* item in a body was lost, because
+the old separator-newline consumption and the new blank-line counter
+were racing over the same tokens.
+
+Also fixed, found while spot-checking `script {}` formatting: `script`
+wasn't a reserved word, so `script { local x = 1 + 1 }` was silently
+misparsed as a **node named "script"** containing a `local` statement
+-- it happened to format back to identical text purely by coincidence
+(the Lua matched valid Scorium syntax), which would have broken
+silently on any real Lua that didn't. `script {}` is now raw-captured
+verbatim at the lexer level (byte-for-byte preserved on format, never
+parsed as Scorium) and evaluating one now raises a clear
+`scorium::eval::script_error` -- no Lua VM is embedded -- instead of
+either misparsing or silently succeeding.
+
+29/29 runnable `scorium-spec` conformance fixtures now pass (up from
+23/23 -- the `formatter/` category is now run). The entire non-Lua
+language core, including the formatter, is implemented.
+
 ## 0.5.0-dev — unreleased
 
 `include`: file reading, cycle detection, and path-containment policy
