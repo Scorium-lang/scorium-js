@@ -9,7 +9,12 @@ export interface Document {
   items: Item[];
 }
 
-export type Item = LeafDecl | NodeDecl | VarDef | IfStmt | ForStmt | WhileStmt | LocalStmt | ReturnStmt | FnDef | ExprStmt;
+export type Item = LeafDecl | NodeDecl | VarDef | IfStmt | ForStmt | WhileStmt | LocalStmt | ReturnStmt | FnDef | ExprStmt | IncludeStmt;
+
+export interface IncludeStmt {
+  type: "include";
+  path: Expr;
+}
 
 export interface LeafDecl {
   type: "leaf";

@@ -56,6 +56,7 @@ const VALUE_FOLLOWS = new Set<TokenKind>([
   "elseif",
   "while",
   "return",
+  "include",
 ]);
 /** Tokens after which a key/node/param name or a new statement follows, so `#` means comment and a plain-ident scan is used. */
 const VALUE_ENDS = new Set<TokenKind>([
@@ -366,6 +367,7 @@ export class Lexer {
     if (text === "local") return this.push("local", {}, start);
     if (text === "return") return this.push("return", {}, start);
     if (text === "fn") return this.push("fn", {}, start);
+    if (text === "include") return this.push("include", {}, start);
     return this.push("ident", {}, start);
   }
 }

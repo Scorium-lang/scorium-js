@@ -45,6 +45,7 @@ export type TokenKind =
   | "local"
   | "return"
   | "fn"
+  | "include"
   | "newline"
   | "eof";
 
