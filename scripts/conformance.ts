@@ -1,19 +1,36 @@
 #!/usr/bin/env node
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "../src/parser.ts";
 import { evaluate } from "../src/eval.ts";
+import type { Entry } from "../src/entry.ts";
 import { decodeEntries, entriesEqual } from "../src/fixture-codec.ts";
 
-// Multi-file (`files`+`entry`) fixtures need `include`, not implemented
-// yet, so they're skipped here rather than attempted. formatter/ and
-// sandbox/ are separate concerns (no formatter, no resource limits yet).
+// formatter/ and sandbox/ are separate concerns (no formatter, no
+// resource limits yet), so they're not run here.
 const SPEC_ROOT = join(import.meta.dirname, "..", "..", "scorium-spec", "conformance", "v0.2.0-draft");
 const CATEGORIES = ["values", "evaluation", "diagnostics"];
 
 let pass = 0;
 let fail = 0;
-let skip = 0;
+
+/** Runs a fixture's `source`, or its `files`+`entry` (written to a scratch dir so `include` has real files to read), returning the evaluated entries. */
+function runFixture(fixture: any): Entry[] {
+  if (!fixture.files) {
+    return evaluate(parse(fixture.source));
+  }
+  const dir = mkdtempSync(join(tmpdir(), "scorium-js-conformance-"));
+  try {
+    for (const [name, content] of Object.entries(fixture.files)) {
+      writeFileSync(join(dir, name), content as string);
+    }
+    const entrySrc = readFileSync(join(dir, fixture.entry), "utf8");
+    return evaluate(parse(entrySrc), { baseDir: dir });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 for (const category of CATEGORIES) {
   const dir = join(SPEC_ROOT, category);
@@ -22,15 +39,9 @@ for (const category of CATEGORIES) {
     const fixture = JSON.parse(readFileSync(join(dir, file), "utf8"));
     const label = `${category}/${file}`;
 
-    if (fixture.files) {
-      skip++;
-      console.log(`SKIP  ${label}  ${fixture.name}  (multi-file / include, not implemented yet)`);
-      continue;
-    }
-
     if (fixture.expect_error) {
       try {
-        evaluate(parse(fixture.source));
+        runFixture(fixture);
         fail++;
         console.log(`FAIL  ${label}  ${fixture.name}`);
         console.log(`      expected error ${fixture.expect_error.code}, but evaluation succeeded`);
@@ -49,7 +60,7 @@ for (const category of CATEGORIES) {
     }
 
     try {
-      const actual = evaluate(parse(fixture.source));
+      const actual = runFixture(fixture);
       const expected = decodeEntries(fixture.expect);
       if (entriesEqual(actual, expected)) {
         pass++;
@@ -68,7 +79,7 @@ for (const category of CATEGORIES) {
   }
 }
 
-console.log(`\n${pass}/${pass + fail} passed (${skip} skipped: multi-file/include)`);
+console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail === 0 ? 0 : 1);
 
 function bigintReplacer(_key: string, value: unknown) {
