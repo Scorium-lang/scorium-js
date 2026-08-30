@@ -1,0 +1,10 @@
+{
+  "name": "integer literal",
+  "source": "x = 42",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "x", "value": { "type": "int", "value": "42" } }
+    ]
+  }
+}

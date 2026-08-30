@@ -1,0 +1,5 @@
+{
+  "name": "-- line comments normalize to # on format",
+  "input": "-- a comment\nport = 8080",
+  "output": "# a comment\nport = 8080\n"
+}

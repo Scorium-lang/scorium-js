@@ -1,0 +1,5 @@
+{
+  "name": "a whole-number float keeps an explicit decimal point so it re-lexes as Float, not Int",
+  "input": "x = 1.0",
+  "output": "x = 1.0\n"
+}

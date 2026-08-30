@@ -1,0 +1,5 @@
+{
+  "name": "$name interpolation has no fallback when undefined",
+  "source": "binding = $nope+Return",
+  "expect_error": { "code": "scorium::eval::undefined_interpolation" }
+}

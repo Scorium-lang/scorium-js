@@ -1,0 +1,9 @@
+{
+  "name": "a two-file include cycle is detected, not infinitely recursed",
+  "files": {
+    "a.scor": "include \"b.scor\"\n",
+    "b.scor": "include \"a.scor\"\n"
+  },
+  "entry": "a.scor",
+  "expect_error": { "code": "scorium::eval::include_cycle" }
+}

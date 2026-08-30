@@ -1,0 +1,13 @@
+{
+  "name": "user-defined fn body emits its own node entry when called",
+  "source": "fn service(name, port) {\n    service {\n        id = $name\n        port = port\n    }\n}\nservice(web, 8080)",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "node", "name": "service", "header": null, "children": [
+        { "kind": "leaf", "key": "id", "value": { "type": "string", "value": "web" } },
+        { "kind": "leaf", "key": "port", "value": { "type": "int", "value": "8080" } }
+      ]}
+    ]
+  }
+}

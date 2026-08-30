@@ -1,0 +1,10 @@
+{
+  "name": "color literal defaults to opaque alpha",
+  "source": "x = #8EDDFF",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "x", "value": { "type": "color", "value": "#8EDDFFFF" } }
+    ]
+  }
+}

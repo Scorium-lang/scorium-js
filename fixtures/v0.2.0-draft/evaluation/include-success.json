@@ -1,0 +1,15 @@
+{
+  "name": "include merges the included file's definitions into the includer",
+  "files": {
+    "main.scor": "include \"theme.scor\"\ncolor_name = $accent",
+    "theme.scor": "@accent = teal\n"
+  },
+  "entry": "main.scor",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "include", "path": "theme.scor" },
+      { "kind": "leaf", "key": "color_name", "value": { "type": "string", "value": "teal" } }
+    ]
+  }
+}

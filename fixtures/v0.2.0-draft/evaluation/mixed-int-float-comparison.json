@@ -1,0 +1,11 @@
+{
+  "name": "Int/Float comparison does not round large integers through f64",
+  "source": "equal = 9007199254740993 == 9007199254740992.0\ngreater = 9007199254740993 > 9007199254740992.0",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "equal", "value": { "type": "bool", "value": false } },
+      { "kind": "leaf", "key": "greater", "value": { "type": "bool", "value": true } }
+    ]
+  }
+}

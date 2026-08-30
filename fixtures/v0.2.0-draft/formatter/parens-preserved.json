@@ -1,0 +1,5 @@
+{
+  "name": "grouping parens are preserved when they change meaning",
+  "input": "value = 1 - (2 - 3)",
+  "output": "value = 1 - (2 - 3)\n"
+}

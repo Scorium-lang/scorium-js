@@ -1,0 +1,10 @@
+{
+  "name": "variable definition and bare-string interpolation",
+  "source": "@mod = SUPER\nbinding = $mod+Return",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "binding", "value": { "type": "string", "value": "SUPER+Return" } }
+    ]
+  }
+}

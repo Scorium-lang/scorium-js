@@ -1,0 +1,5 @@
+{
+  "name": "redundant parens are removed when precedence already implies them",
+  "input": "value = 1 + (2 * 3)",
+  "output": "value = 1 + 2 * 3\n"
+}

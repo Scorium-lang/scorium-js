@@ -1,0 +1,11 @@
+{
+  "name": "color.darken(1.0) fully darkens to black, alpha unchanged",
+  "source": "primary = #8EDDFF\ndeep = primary.darken(1.0)",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "primary", "value": { "type": "color", "value": "#8EDDFFFF" } },
+      { "kind": "leaf", "key": "deep", "value": { "type": "color", "value": "#000000FF" } }
+    ]
+  }
+}

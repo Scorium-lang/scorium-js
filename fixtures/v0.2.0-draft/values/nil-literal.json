@@ -1,0 +1,10 @@
+{
+  "name": "nil literal",
+  "source": "x = nil",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "x", "value": { "type": "nil" } }
+    ]
+  }
+}

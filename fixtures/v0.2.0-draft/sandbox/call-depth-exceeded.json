@@ -1,0 +1,5 @@
+{
+  "name": "unbounded fn recursion trips the default call-depth budget",
+  "source": "fn recurse() {\n    return recurse()\n}\nvalue = recurse()",
+  "expect_error": { "code": "scorium::eval::call_depth_exceeded" }
+}

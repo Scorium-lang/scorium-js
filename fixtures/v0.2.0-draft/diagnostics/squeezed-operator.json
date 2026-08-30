@@ -1,0 +1,5 @@
+{
+  "name": "a binary operator without surrounding spaces is a lex error, not a bare string",
+  "source": "size = base*2",
+  "expect_error": { "code": "scorium::lex::squeezed_operator" }
+}

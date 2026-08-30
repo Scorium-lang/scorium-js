@@ -1,0 +1,5 @@
+{
+  "name": "calling a name that is neither a host function nor a Scorium fn",
+  "source": "x = nonexistent(1, 2)",
+  "expect_error": { "code": "scorium::eval::unknown_function" }
+}

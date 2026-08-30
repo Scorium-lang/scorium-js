@@ -1,0 +1,23 @@
+{
+  "name": "mixed-type list, unbound bare words fall back to strings",
+  "source": "mixed_list = [one, two, \"three four\", 42, true]",
+  "expect": {
+    "type": "entries",
+    "value": [
+      {
+        "kind": "leaf",
+        "key": "mixed_list",
+        "value": {
+          "type": "list",
+          "value": [
+            { "type": "string", "value": "one" },
+            { "type": "string", "value": "two" },
+            { "type": "string", "value": "three four" },
+            { "type": "int", "value": "42" },
+            { "type": "bool", "value": true }
+          ]
+        }
+      }
+    ]
+  }
+}

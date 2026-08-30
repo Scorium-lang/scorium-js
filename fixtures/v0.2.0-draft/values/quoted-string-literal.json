@@ -1,0 +1,10 @@
+{
+  "name": "quoted string literal is never interpolated",
+  "source": "x = \"$HOME/example\"",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "x", "value": { "type": "string", "value": "$HOME/example" } }
+    ]
+  }
+}

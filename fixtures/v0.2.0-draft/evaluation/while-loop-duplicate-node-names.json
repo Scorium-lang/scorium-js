@@ -1,0 +1,18 @@
+{
+  "name": "while loop with local-counter reassignment generates repeated nodes",
+  "source": "local n = 0\nwhile n < 3 do\n    item {\n        value = n\n    }\n    n = n + 1\nend",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "node", "name": "item", "header": null, "children": [
+        { "kind": "leaf", "key": "value", "value": { "type": "int", "value": "0" } }
+      ]},
+      { "kind": "node", "name": "item", "header": null, "children": [
+        { "kind": "leaf", "key": "value", "value": { "type": "int", "value": "1" } }
+      ]},
+      { "kind": "node", "name": "item", "header": null, "children": [
+        { "kind": "leaf", "key": "value", "value": { "type": "int", "value": "2" } }
+      ]}
+    ]
+  }
+}

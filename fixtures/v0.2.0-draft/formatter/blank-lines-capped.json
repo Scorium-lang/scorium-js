@@ -1,0 +1,5 @@
+{
+  "name": "multiple consecutive blank lines collapse to at most one",
+  "input": "a = 1\n\n\n\nb = 2",
+  "output": "a = 1\n\nb = 2\n"
+}

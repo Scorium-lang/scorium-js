@@ -1,0 +1,10 @@
+{
+  "name": "integer division always returns a float",
+  "source": "result = 4 / 2",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "result", "value": { "type": "float", "value": "2.0" } }
+    ]
+  }
+}

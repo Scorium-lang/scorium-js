@@ -1,0 +1,10 @@
+{
+  "name": "duration literal",
+  "source": "x = 600ms",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "x", "value": { "type": "duration", "value": "600ms" } }
+    ]
+  }
+}

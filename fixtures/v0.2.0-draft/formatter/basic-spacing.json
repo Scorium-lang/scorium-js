@@ -1,0 +1,5 @@
+{
+  "name": "node/leaf spacing and brace placement",
+  "input": "server{port=8080\nenabled=true}",
+  "output": "server {\n    port = 8080\n    enabled = true\n}\n"
+}

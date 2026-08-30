@@ -1,0 +1,5 @@
+{
+  "name": "@name is only valid on its own definition line, not inside an expression",
+  "source": "gaps = @base * 2",
+  "expect_error": { "code": "scorium::parse::at_in_expression" }
+}

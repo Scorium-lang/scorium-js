@@ -1,0 +1,10 @@
+{
+  "name": "boolean literal",
+  "source": "x = true",
+  "expect": {
+    "type": "entries",
+    "value": [
+      { "kind": "leaf", "key": "x", "value": { "type": "bool", "value": true } }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "checked integer addition overflow",
+  "source": "value = 9223372036854775807 + 1",
+  "expect_error": { "code": "scorium::eval::arithmetic_overflow" }
+}
