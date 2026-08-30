@@ -86,14 +86,20 @@ const VALUE_ENDS = new Set<TokenKind>([
 
 export class Lexer {
   private readonly src: string;
+  private readonly sourceName: string;
   private pos = 0;
   private expectValue = false;
   private bracketDepth = 0;
   /** Set right after emitting a `script` token; the next `next()` call raw-captures the `{ ... }` body instead of tokenizing normally. */
   private pendingScriptBody = false;
 
-  constructor(src: string) {
+  constructor(src: string, sourceName = "<input>") {
     this.src = src;
+    this.sourceName = sourceName;
+  }
+
+  private fail(message: string, start: number, end = Math.max(start + 1, this.pos)): never {
+    throw new LexError(message, { source: { name: this.sourceName, text: this.src }, span: { start, end } });
   }
 
   tokenize(): Token[] {
@@ -125,8 +131,10 @@ export class Lexer {
       const after = this.src[this.pos];
       if (isSqueezeBoundary(before) && isSqueezeBoundary(after)) {
         const suggestion = `${before} ${this.src.slice(start, this.pos)} ${after}`;
-        throw new LexError(
+        this.fail(
           `scorium::lex::squeezed_operator: operators in expressions require spaces around them; write "${suggestion}"`,
+          start,
+          this.pos,
         );
       }
     }
@@ -217,7 +225,7 @@ export class Lexer {
     }
     if (isIdentStart(ch)) return this.lexPlainIdent(start);
 
-    throw new LexError(`scorium::lex::unexpected_char: unexpected character ${JSON.stringify(ch)} at offset ${start}`);
+    this.fail(`scorium::lex::unexpected_char: unexpected character ${JSON.stringify(ch)} at offset ${start}`, start);
   }
 
   /** Whitespace only (not newlines, not comments -- comments are real tokens, see `next()`). */
@@ -244,7 +252,10 @@ export class Lexer {
     while (/\s/.test(this.src[this.pos] ?? "")) this.pos++;
     const start = this.pos;
     if (this.src[this.pos] !== "{") {
-      throw new LexError(`scorium::parse::unexpected_token: expected '{' after 'script', found ${JSON.stringify(this.src[this.pos] ?? "eof")} at offset ${this.pos}`);
+      this.fail(
+        `scorium::parse::unexpected_token: expected '{' after 'script', found ${JSON.stringify(this.src[this.pos] ?? "eof")} at offset ${this.pos}`,
+        this.pos,
+      );
     }
     this.pos++;
     const bodyStart = this.pos;
@@ -255,7 +266,7 @@ export class Lexer {
       else if (ch === "}") depth--;
       if (depth > 0) this.pos++;
     }
-    if (depth !== 0) throw new LexError("scorium::parse::unexpected_eof: unterminated script block");
+    if (depth !== 0) this.fail("scorium::parse::unexpected_eof: unterminated script block", start, this.pos);
     const raw = this.src.slice(bodyStart, this.pos);
     this.pos++; // consume the closing '}'
     return this.push("rawscript", { scriptRaw: raw }, start);
@@ -263,7 +274,7 @@ export class Lexer {
 
   private lexBlockComment(start: number): Token {
     const close = this.src.indexOf("]]", start + 4);
-    if (close === -1) throw new LexError("scorium::lex::unterminated_comment: unterminated block comment");
+    if (close === -1) this.fail("scorium::lex::unterminated_comment: unterminated block comment", start, this.src.length);
     const text = this.src.slice(start + 4, close);
     this.pos = close + 2;
     return this.push("comment", { commentText: text, commentBlock: true }, start);
@@ -275,7 +286,7 @@ export class Lexer {
     for (;;) {
       const ch = this.src[this.pos];
       if (ch === undefined || ch === "\n") {
-        throw new LexError("scorium::lex::unterminated_string: unterminated string literal");
+        this.fail("scorium::lex::unterminated_string: unterminated string literal", start, this.pos);
       }
       if (ch === '"') {
         this.pos++;
@@ -285,7 +296,7 @@ export class Lexer {
         const esc = this.src[this.pos + 1];
         const map: Record<string, string> = { '"': '"', "\\": "\\", n: "\n", t: "\t", r: "\r" };
         if (esc === undefined || !(esc in map)) {
-          throw new LexError(`scorium::lex::unexpected_char: invalid escape \\${esc ?? ""}`);
+          this.fail(`scorium::lex::unexpected_char: invalid escape \\${esc ?? ""}`, this.pos, this.pos + 2);
         }
         out += map[esc];
         this.pos += 2;
@@ -306,7 +317,11 @@ export class Lexer {
       this.pos++;
     }
     if (hex.length !== 6 && hex.length !== 8) {
-      throw new LexError(`scorium::lex::unexpected_char: color literal must have 6 or 8 hex digits, got ${hex.length}`);
+      this.fail(
+        `scorium::lex::unexpected_char: color literal must have 6 or 8 hex digits, got ${hex.length}`,
+        start,
+        this.pos,
+      );
     }
     return this.push("color", { colorHex: hex.toUpperCase() }, start);
   }

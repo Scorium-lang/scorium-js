@@ -21,5 +21,11 @@ test("return propagates through a nested node body", () => {
 answer = choose()`),
   );
 
-  assert.deepEqual(entries, [{ kind: "leaf", key: "answer", value: { kind: "int", value: 7n } }]);
+  assert.equal(entries.length, 1);
+  const answer = entries[0];
+  assert.equal(answer?.kind, "leaf");
+  if (answer?.kind !== "leaf") throw new Error("expected answer leaf");
+  assert.equal(answer.key, "answer");
+  assert.deepEqual(answer.value, { kind: "int", value: 7n });
+  assert.ok(answer.span);
 });

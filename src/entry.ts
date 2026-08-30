@@ -1,4 +1,5 @@
 import type { Value } from "./value.ts";
+import type { SourceSpan } from "./source.ts";
 
 /**
  * The evaluated configuration tree (scorium-spec conformance/README.md's
@@ -8,6 +9,6 @@ import type { Value } from "./value.ts";
  * represent.
  */
 export type Entry =
-  | { kind: "leaf"; key: string; value: Value }
-  | { kind: "node"; name: string; header: string | null; children: Entry[] }
-  | { kind: "include"; path: string };
+  | { kind: "leaf"; key: string; value: Value; span?: SourceSpan }
+  | { kind: "node"; name: string; header: string | null; children: Entry[]; span?: SourceSpan }
+  | { kind: "include"; path: string; span?: SourceSpan };

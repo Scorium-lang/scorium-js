@@ -2,8 +2,9 @@ import { readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 import type { BinOp, Document, Expr, FnDef, Item, UnOp } from "./ast.ts";
 import type { Entry } from "./entry.ts";
-import { EvalError } from "./errors.ts";
+import { EvalError, ScoriumError } from "./errors.ts";
 import { parse } from "./parser.ts";
+import type { SourceFile, SourceSpan } from "./source.ts";
 import { makeInt, type Value } from "./value.ts";
 
 export { EvalError };
@@ -68,6 +69,7 @@ interface Binding {
 type Frame = Map<string, Binding>;
 
 interface EvalCtx {
+  source: SourceFile;
   /** `@`-variables: one flat scope, global to the whole evaluation, never reassignable. */
   atVars: Map<string, Value>;
   /** Locals/params/loop-vars: a stack of block scopes, innermost last. */
@@ -96,7 +98,7 @@ interface EvalCtx {
   budget: { loopIterationsUsed: number; callDepth: number };
 }
 
-type Flow = { kind: "normal" } | { kind: "return"; value: Value };
+type Flow = { kind: "normal" } | { kind: "return"; value: Value; span?: SourceSpan };
 const NORMAL: Flow = { kind: "normal" };
 
 /**
@@ -106,6 +108,7 @@ const NORMAL: Flow = { kind: "normal" };
 export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
   const sandbox = { ...DEFAULT_SANDBOX, ...options.sandbox };
   const ctx: EvalCtx = {
+    source: doc.source ?? { name: "<input>", text: "" },
     atVars: new Map(),
     locals: [new Map()],
     functions: new Map(),
@@ -121,7 +124,10 @@ export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
   };
   const flow = evalItems(doc.items, ctx);
   if (flow.kind === "return") {
-    throw new EvalError("scorium::eval::return_outside_function: `return` is only valid inside a Scorium function");
+    throw new EvalError("scorium::eval::return_outside_function: `return` is only valid inside a Scorium function", {
+      source: ctx.source,
+      span: flow.span ?? { start: 0, end: 1 },
+    });
   }
   return ctx.sink;
 }
@@ -187,6 +193,17 @@ function setLocalIfExists(ctx: EvalCtx, name: string, value: Value): boolean {
 }
 
 function evalItem(item: Item, ctx: EvalCtx): Flow {
+  try {
+    return evalItemInner(item, ctx);
+  } catch (error) {
+    if (error instanceof ScoriumError && item.span) {
+      error.attachContext({ source: ctx.source, span: item.span });
+    }
+    throw error;
+  }
+}
+
+function evalItemInner(item: Item, ctx: EvalCtx): Flow {
   switch (item.type) {
     case "vardef":
       ctx.atVars.set(item.name, evalExpr(item.value, ctx));
@@ -197,7 +214,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
     case "leaf": {
       const value = evalExpr(item.value, ctx);
       if (!setLocalIfExists(ctx, item.key, value)) {
-        ctx.sink.push({ kind: "leaf", key: item.key, value });
+        ctx.sink.push({ kind: "leaf", key: item.key, value, span: item.span });
       }
       return NORMAL;
     }
@@ -206,7 +223,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
       const children: Entry[] = [];
       const flow = evalBlockScoped(item.body, { ...ctx, sink: children });
       if (flow.kind === "return") return flow;
-      ctx.sink.push({ kind: "node", name: item.name, header, children });
+      ctx.sink.push({ kind: "node", name: item.name, header, children, span: item.span });
       return NORMAL;
     }
     case "fndef":
@@ -222,7 +239,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
       if (pathVal.kind !== "string") {
         throw new EvalError(`scorium::eval::type_error: an include path must be a string, found ${pathVal.kind}`);
       }
-      return execInclude(pathVal.value, ctx);
+      return execInclude(pathVal.value, ctx, item.span);
     }
     case "exprstmt":
       evalExpr(item.expr, ctx); // side effect only: any entries the callee's body produces land in ctx.sink
@@ -258,7 +275,7 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
       return NORMAL;
     }
     case "return":
-      return { kind: "return", value: item.value ? evalExpr(item.value, ctx) : NIL };
+      return { kind: "return", value: item.value ? evalExpr(item.value, ctx) : NIL, span: item.span };
   }
 }
 
@@ -295,7 +312,7 @@ function checkIncludePath(pathStr: string, ctx: EvalCtx): string {
   return resolved;
 }
 
-function execInclude(pathStr: string, ctx: EvalCtx): Flow {
+function execInclude(pathStr: string, ctx: EvalCtx, span?: SourceSpan): Flow {
   const resolved = checkIncludePath(pathStr, ctx);
   let canonical: string;
   try {
@@ -315,12 +332,17 @@ function execInclude(pathStr: string, ctx: EvalCtx): Flow {
   }
   let includedDoc: Document;
   try {
-    includedDoc = parse(content);
+    includedDoc = parse(content, { sourceName: resolved });
   } catch (err) {
     throw new EvalError(`scorium::eval::include_parse: include \`${pathStr}\` failed to parse: ${(err as Error).message}`);
   }
-  ctx.sink.push({ kind: "include", path: pathStr });
-  const childCtx: EvalCtx = { ...ctx, baseDir: dirname(resolved), includeStack: [...ctx.includeStack, canonical] };
+  ctx.sink.push({ kind: "include", path: pathStr, span });
+  const childCtx: EvalCtx = {
+    ...ctx,
+    source: includedDoc.source ?? { name: resolved, text: content },
+    baseDir: dirname(resolved),
+    includeStack: [...ctx.includeStack, canonical],
+  };
   // Shares sink/variables/functions by reference and propagates `return`
   // through an include reached from a Scorium function.
   return evalItems(includedDoc.items, childCtx);

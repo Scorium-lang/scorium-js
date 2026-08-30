@@ -2,19 +2,18 @@ import type { BinOp, Comment, Document, Expr, HeaderValue, Item } from "./ast.ts
 import { ParseError } from "./errors.ts";
 import { Lexer } from "./lexer.ts";
 import type { Token, TokenKind } from "./token.ts";
+import type { SourceFile } from "./source.ts";
 
 export { ParseError };
 
-export function parse(src: string): Document {
-  const tokens = new Lexer(src).tokenize();
-  return new Parser(tokens).parseDocument();
+export interface ParseOptions {
+  sourceName?: string;
 }
 
-/** Throws `dollar_in_expression` when a `$`-containing bare string is used as an operand of a binary operator (scorium-spec §1) -- valid only as a whole, standalone value. */
-function rejectDollarBare(expr: Expr): void {
-  if (expr.type === "str" && expr.lit.kind === "bare" && expr.lit.parts.some((p) => p.kind === "interp")) {
-    throw new ParseError("scorium::parse::dollar_in_expression: `$name` cannot be used in an expression; use `name` for an expression value");
-  }
+export function parse(src: string, options: ParseOptions = {}): Document {
+  const source: SourceFile = { name: options.sourceName ?? "<input>", text: src };
+  const tokens = new Lexer(src, source.name).tokenize();
+  return new Parser(tokens, source).parseDocument();
 }
 
 const CMP_OPS: Partial<Record<TokenKind, BinOp>> = { eqeq: "eq", noteq: "noteq", lt: "lt", gt: "gt", lte: "lte", gte: "gte" };
@@ -23,9 +22,25 @@ const MUL_OPS: Partial<Record<TokenKind, BinOp>> = { star: "mul", slash: "div", 
 
 class Parser {
   private readonly tokens: Token[];
+  private readonly source: SourceFile;
   private i = 0;
-  constructor(tokens: Token[]) {
+  constructor(tokens: Token[], source: SourceFile) {
     this.tokens = tokens;
+    this.source = source;
+  }
+
+  private fail(message: string, token = this.peek()): never {
+    throw new ParseError(message, {
+      source: this.source,
+      span: { start: token.pos, end: Math.max(token.pos + 1, token.pos + token.text.length) },
+    });
+  }
+
+  /** Throws when a `$`-interpolated bare string is used as an expression operand. */
+  private rejectDollarBare(expr: Expr): void {
+    if (expr.type === "str" && expr.lit.kind === "bare" && expr.lit.parts.some((part) => part.kind === "interp")) {
+      this.fail("scorium::parse::dollar_in_expression: `$name` cannot be used in an expression; use `name` for an expression value");
+    }
   }
 
   private peek(): Token {
@@ -37,14 +52,14 @@ class Parser {
   private expect(kind: Token["kind"]): Token {
     const tok = this.peek();
     if (tok.kind !== kind) {
-      throw new ParseError(`scorium::parse::unexpected_token: expected ${kind}, found ${tok.kind} (${JSON.stringify(tok.text)}) at offset ${tok.pos}`);
+      this.fail(`scorium::parse::unexpected_token: expected ${kind}, found ${tok.kind} (${JSON.stringify(tok.text)}) at offset ${tok.pos}`, tok);
     }
     return this.advance();
   }
 
   parseDocument(): Document {
     const { items, trailing } = this.parseItemsAndTrailing(["eof"]);
-    return { items, trailing };
+    return { items, trailing, source: this.source };
   }
 
   /** Parses items until one of `stops` is next, requiring a newline between consecutive items (matches parseDocument's own top-level rule). Discards any dangling comments right before the stop token (e.g. just before `end`) -- not attached anywhere in this AST, a minor known gap (no fixture exercises it). */
@@ -60,7 +75,7 @@ class Parser {
       const kind = this.peek().kind;
       if (stops.includes(kind)) return { items, trailing: leading };
       if (kind === "eof") {
-        throw new ParseError("scorium::parse::unexpected_eof: unexpected end of file inside a block");
+        this.fail("scorium::parse::unexpected_eof: unexpected end of file inside a block");
       }
       const item = this.parseItem();
       let trailing: Comment | null = null;
@@ -77,7 +92,7 @@ class Parser {
       // following "\n\n" down to a single newline every time).
       const after = this.peek().kind;
       if (!stops.includes(after) && after !== "eof" && after !== "newline") {
-        throw new ParseError(`scorium::parse::unexpected_token: expected newline, found ${after} (${JSON.stringify(this.peek().text)}) at offset ${this.peek().pos}`);
+        this.fail(`scorium::parse::unexpected_token: expected newline, found ${after} (${JSON.stringify(this.peek().text)}) at offset ${this.peek().pos}`);
       }
     }
   }
@@ -107,6 +122,14 @@ class Parser {
   }
 
   private parseItem(): Item {
+    const start = this.peek().pos;
+    const item = this.parseItemInner();
+    const previous = this.tokens[Math.max(0, this.i - 1)]!;
+    item.span = { start, end: previous.pos + previous.text.length };
+    return item;
+  }
+
+  private parseItemInner(): Item {
     switch (this.peek().kind) {
       case "at": {
         this.advance();
@@ -271,9 +294,9 @@ class Parser {
     let left = this.parseAnd();
     while (this.peek().kind === "or") {
       this.advance();
-      rejectDollarBare(left);
+      this.rejectDollarBare(left);
       const right = this.parseAnd();
-      rejectDollarBare(right);
+      this.rejectDollarBare(right);
       left = { type: "binary", op: "or", left, right };
     }
     return left;
@@ -283,9 +306,9 @@ class Parser {
     let left = this.parseCmp();
     while (this.peek().kind === "and") {
       this.advance();
-      rejectDollarBare(left);
+      this.rejectDollarBare(left);
       const right = this.parseCmp();
-      rejectDollarBare(right);
+      this.rejectDollarBare(right);
       left = { type: "binary", op: "and", left, right };
     }
     return left;
@@ -296,9 +319,9 @@ class Parser {
     const op = CMP_OPS[this.peek().kind];
     if (op) {
       this.advance();
-      rejectDollarBare(left);
+      this.rejectDollarBare(left);
       const right = this.parseAdd();
-      rejectDollarBare(right);
+      this.rejectDollarBare(right);
       left = { type: "binary", op, left, right };
     }
     return left;
@@ -310,9 +333,9 @@ class Parser {
       const op = ADD_OPS[this.peek().kind];
       if (!op) break;
       this.advance();
-      rejectDollarBare(left);
+      this.rejectDollarBare(left);
       const right = this.parseMul();
-      rejectDollarBare(right);
+      this.rejectDollarBare(right);
       left = { type: "binary", op, left, right };
     }
     return left;
@@ -324,9 +347,9 @@ class Parser {
       const op = MUL_OPS[this.peek().kind];
       if (!op) break;
       this.advance();
-      rejectDollarBare(left);
+      this.rejectDollarBare(left);
       const right = this.parseUnary();
-      rejectDollarBare(right);
+      this.rejectDollarBare(right);
       left = { type: "binary", op, left, right };
     }
     return left;
@@ -336,13 +359,13 @@ class Parser {
     if (this.peek().kind === "minus") {
       this.advance();
       const operand = this.parseUnary();
-      rejectDollarBare(operand);
+      this.rejectDollarBare(operand);
       return { type: "unary", op: "neg", operand };
     }
     if (this.peek().kind === "not") {
       this.advance();
       const operand = this.parseUnary();
-      rejectDollarBare(operand);
+      this.rejectDollarBare(operand);
       return { type: "unary", op: "not", operand };
     }
     return this.parsePrimary();
@@ -406,11 +429,12 @@ class Parser {
         return inner;
       }
       case "at":
-        throw new ParseError(
+        this.fail(
           `scorium::parse::at_in_expression: \`@${this.tokens[this.i + 1]?.text ?? ""}\` only defines a variable on its own line; in an expression use the plain name`,
+          tok,
         );
       default:
-        throw new ParseError(`scorium::parse::unexpected_token: expected a value, found ${tok.kind} at offset ${tok.pos}`);
+        this.fail(`scorium::parse::unexpected_token: expected a value, found ${tok.kind} at offset ${tok.pos}`, tok);
     }
   }
 

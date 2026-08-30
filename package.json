@@ -24,7 +24,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
     "conformance": "node scripts/conformance.ts",
-    "test": "node --test scripts/eval.test.ts && node scripts/conformance.ts"
+    "test": "node --test scripts/*.test.ts && node scripts/conformance.ts"
   },
   "repository": {
     "type": "git",

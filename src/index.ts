@@ -7,4 +7,5 @@ export { ScoriumError, LexError } from "./errors.ts";
 export type { Document, Item, LeafDecl, NodeDecl, VarDef, Expr, HeaderValue, StrLit, BarePart, UnOp, BinOp, IncludeStmt, ScriptBlock, Comment, Trivia } from "./ast.ts";
 export type { Value } from "./value.ts";
 export type { Entry } from "./entry.ts";
+export type { SourceFile, SourceLocation, SourceSpan } from "./source.ts";
 export { SCORIUM_LANGUAGE_VERSION } from "./version.ts";
