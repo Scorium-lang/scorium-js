@@ -101,8 +101,7 @@ evaluate(parse("terminal = pick(kitty, alacritty)"), {
 ```
 
 Sandbox limits and `include` behavior are configurable the same way --
-see `EvalOptions` in `src/eval.ts` for the full surface until real API
-docs exist.
+see the [embedding guide](./docs/EMBEDDING.md) for the complete API.
 
 ## Current scope
 
@@ -126,16 +125,26 @@ something this repository decides alone.
 
 The language core and its conformance verification are done; this is a
 real, working, embeddable implementation, but it is pre-1.0 and the
-public API may change. See [CHANGELOG.md](./CHANGELOG.md) for what
+public API may change. See [docs/ROADMAP.md](./docs/ROADMAP.md) for what
+exists and what is deferred, and [CHANGELOG.md](./CHANGELOG.md) for what
 shipped and when.
+
+## Documentation
+
+- [Language guide](./docs/LANGUAGE.md) -- start here.
+- [Grammar](./docs/GRAMMAR.md) -- the implemented grammar.
+- [Embedding](./docs/EMBEDDING.md) -- the TypeScript API for hosts.
+- [Diagnostics](./docs/DIAGNOSTICS.md) -- the diagnostic catalogue.
+- [Security model](./docs/SECURITY.md) -- evaluator and host responsibility.
+- [Roadmap](./docs/ROADMAP.md) -- what exists and what is deferred.
 
 ## Security
 
 There is no `script { }` execution yet, so there is no Lua sandbox
 surface to secure -- the threat model today is the native language core's
 own resource limits (loop budget, call-depth limit) and `include` path
-containment. See [SECURITY.md](./SECURITY.md) for the full model and how
-to report a vulnerability.
+containment. See [docs/SECURITY.md](./docs/SECURITY.md) for the detailed
+model and [SECURITY.md](./SECURITY.md) for private vulnerability reporting.
 
 ## Licensing
 

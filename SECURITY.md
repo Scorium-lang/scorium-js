@@ -77,6 +77,9 @@ no backport branches yet.
   `include` entirely with `{ includePolicy: { enabled: false } }`.
 - Evaluate untrusted input in a process you would be willing to crash.
 
+See [docs/SECURITY.md](./docs/SECURITY.md) for the detailed evaluator,
+include, host-capability, and package threat model.
+
 ---
 
 **Legal notice.** This policy states initial project terms and
