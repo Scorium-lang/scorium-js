@@ -1,8 +1,22 @@
+import { readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, resolve, sep } from "node:path";
 import type { BinOp, Document, Expr, FnDef, Item, UnOp } from "./ast.ts";
 import type { Entry } from "./entry.ts";
+import { parse } from "./parser.ts";
 import { makeInt, type Value } from "./value.ts";
 
 export class EvalError extends Error {}
+
+/** `include` behavior (scorium-spec §6). Matches scorium-rust's `IncludePolicy` defaults. */
+export interface IncludePolicy {
+  enabled: boolean;
+  allowParentTraversal: boolean;
+}
+export interface EvalOptions {
+  /** Directory relative `include "..."` paths resolve from. Defaults to the current working directory, matching a source with no file of its own. */
+  baseDir?: string;
+  includePolicy?: Partial<IncludePolicy>;
+}
 
 const I64_MIN_AS_F64 = -9223372036854775808.0;
 const I64_MAX_PLUS_ONE_AS_F64 = 9223372036854775808.0;
@@ -31,18 +45,30 @@ interface EvalCtx {
   functions: Map<string, FnDef>;
   /** Where node/leaf/include entries produced right now are appended -- shared across nested control flow, swapped only when entering a node body. */
   sink: Entry[];
+  /** Where relative `include` paths resolve from -- changes to the included file's own directory inside its evaluation (scorium-rust does the same). */
+  baseDir: string;
+  includePolicy: IncludePolicy;
+  /** Canonical paths of includes currently in progress, for cycle detection (scorium-spec §3). */
+  includeStack: string[];
 }
 
 type Flow = { kind: "normal" } | { kind: "return"; value: Value };
 const NORMAL: Flow = { kind: "normal" };
 
 /**
- * Evaluates the full non-Lua language core (scorium-spec §1-3), still
- * missing member/method calls, `include`, and `script {}` -- see
- * README.md "Current scope".
+ * Evaluates the full language core (scorium-spec §1-3, §6) except
+ * `script {}` -- see README.md "Current scope".
  */
-export function evaluate(doc: Document): Entry[] {
-  const ctx: EvalCtx = { atVars: new Map(), locals: [new Map()], functions: new Map(), sink: [] };
+export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
+  const ctx: EvalCtx = {
+    atVars: new Map(),
+    locals: [new Map()],
+    functions: new Map(),
+    sink: [],
+    baseDir: options.baseDir ?? process.cwd(),
+    includePolicy: { enabled: true, allowParentTraversal: false, ...options.includePolicy },
+    includeStack: [],
+  };
   evalItems(doc.items, ctx);
   return ctx.sink;
 }
@@ -127,6 +153,14 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
     case "fndef":
       ctx.functions.set(item.name, item);
       return NORMAL;
+    case "include": {
+      const pathVal = evalExpr(item.path, ctx);
+      if (pathVal.kind !== "string") {
+        throw new EvalError(`scorium::eval::type_error: an include path must be a string, found ${pathVal.kind}`);
+      }
+      execInclude(pathVal.value, ctx);
+      return NORMAL;
+    }
     case "exprstmt":
       evalExpr(item.expr, ctx); // side effect only: any entries the callee's body produces land in ctx.sink
       return NORMAL;
@@ -161,6 +195,68 @@ function evalItem(item: Item, ctx: EvalCtx): Flow {
     case "return":
       return { kind: "return", value: item.value ? evalExpr(item.value, ctx) : NIL };
   }
+}
+
+/**
+ * Path containment (scorium-spec §6): reject a textual `..`/absolute
+ * path outright, then -- independently, since a purely relative path
+ * can still escape through a symlink -- canonicalize both the include
+ * root and the resolved target and require containment. If either
+ * canonicalization fails (e.g. the target doesn't exist yet), skip the
+ * containment check and let the later read fail with `include_io`
+ * instead -- matches scorium-rust's own fallback exactly.
+ */
+function checkIncludePath(pathStr: string, ctx: EvalCtx): string {
+  if (!ctx.includePolicy.enabled) {
+    throw new EvalError("scorium::eval::includes_disabled: `include` is disabled by the host application");
+  }
+  const hasParentTraversal = pathStr.split(/[\\/]/).includes("..");
+  if (!ctx.includePolicy.allowParentTraversal && (isAbsolute(pathStr) || hasParentTraversal)) {
+    throw new EvalError(`scorium::eval::include_path_denied: include path \`${pathStr}\` is not allowed by the host's path policy`);
+  }
+  const resolved = resolve(ctx.baseDir, pathStr);
+  if (!ctx.includePolicy.allowParentTraversal) {
+    try {
+      const canonicalBase = realpathSync(ctx.baseDir);
+      const canonicalTarget = realpathSync(resolved);
+      if (canonicalTarget !== canonicalBase && !canonicalTarget.startsWith(canonicalBase + sep)) {
+        throw new EvalError(`scorium::eval::include_path_denied: include path \`${pathStr}\` escapes the include root`);
+      }
+    } catch (err) {
+      if (err instanceof EvalError) throw err;
+      // realpath failed (target doesn't exist yet, dangling symlink, ...) -- fall through to the read, which will raise include_io.
+    }
+  }
+  return resolved;
+}
+
+function execInclude(pathStr: string, ctx: EvalCtx): void {
+  const resolved = checkIncludePath(pathStr, ctx);
+  let canonical: string;
+  try {
+    canonical = realpathSync(resolved);
+  } catch {
+    canonical = resolved;
+  }
+  if (ctx.includeStack.includes(canonical)) {
+    const chain = [...ctx.includeStack, canonical].join(" -> ");
+    throw new EvalError(`scorium::eval::include_cycle: include cycle detected: ${chain}`);
+  }
+  let content: string;
+  try {
+    content = readFileSync(resolved, "utf8");
+  } catch (err) {
+    throw new EvalError(`scorium::eval::include_io: failed to read include \`${pathStr}\`: ${(err as Error).message}`);
+  }
+  let includedDoc: Document;
+  try {
+    includedDoc = parse(content);
+  } catch (err) {
+    throw new EvalError(`scorium::eval::include_parse: include \`${pathStr}\` failed to parse: ${(err as Error).message}`);
+  }
+  ctx.sink.push({ kind: "include", path: pathStr });
+  const childCtx: EvalCtx = { ...ctx, baseDir: dirname(resolved), includeStack: [...ctx.includeStack, canonical] };
+  evalItems(includedDoc.items, childCtx); // shares ctx.sink/atVars/locals/functions by reference -- merges into the includer
 }
 
 function requireNumber(v: Value): number {
