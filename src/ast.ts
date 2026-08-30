@@ -5,27 +5,65 @@
  * README.md "Current scope".
  */
 
-export interface Document {
-  items: Item[];
+/** A `#`/`--` line comment or a `--[[ ]]` block comment (scorium-spec §4). */
+export interface Comment {
+  text: string;
+  block: boolean;
 }
 
-export type Item = LeafDecl | NodeDecl | VarDef | IfStmt | ForStmt | WhileStmt | LocalStmt | ReturnStmt | FnDef | ExprStmt | IncludeStmt;
+/**
+ * Comment trivia attached to an item, for the formatter only --
+ * evaluation never reads this. Preservation is item-granularity only:
+ * a comment leading an item (its own line above) or trailing one (same
+ * line, after it). A comment between `=` and its value, or inside a
+ * list/call's parens, isn't tracked and is dropped on format -- matches
+ * scorium-rust's own documented limitation.
+ */
+export interface Trivia {
+  leading: Comment[];
+  trailing: Comment | null;
+  /** Was there a blank line before this item (or its leading comments) in the source? The formatter reproduces at most one. */
+  blankLineBefore: boolean;
+}
+
+export interface Document {
+  items: Item[];
+  /** Comments left over after the last item (end-of-file trivia). */
+  trailing: Comment[];
+}
+
+export type Item = LeafDecl | NodeDecl | VarDef | IfStmt | ForStmt | WhileStmt | LocalStmt | ReturnStmt | FnDef | ExprStmt | IncludeStmt | ScriptBlock;
+
+/**
+ * `script { ... }`: raw Lua text, captured verbatim and never parsed
+ * as Scorium or reformatted (scorium-spec §1). This build can parse
+ * and format a document containing one, but not execute it -- see
+ * README.md and scorium-spec §7 (still unapproved).
+ */
+export interface ScriptBlock {
+  type: "script";
+  raw: string;
+  trivia?: Trivia;
+}
 
 export interface IncludeStmt {
   type: "include";
   path: Expr;
+  trivia?: Trivia;
 }
 
 export interface LeafDecl {
   type: "leaf";
   key: string;
   value: Expr;
+  trivia?: Trivia;
 }
 
 export interface VarDef {
   type: "vardef";
   name: string;
   value: Expr;
+  trivia?: Trivia;
 }
 
 export type HeaderValue = { kind: "bare"; text: string } | { kind: "quoted"; text: string };
@@ -35,6 +73,7 @@ export interface NodeDecl {
   name: string;
   header: HeaderValue | null;
   body: Item[];
+  trivia?: Trivia;
 }
 
 export interface IfStmt {
@@ -43,6 +82,7 @@ export interface IfStmt {
   thenBody: Item[];
   elifs: Array<{ cond: Expr; body: Item[] }>;
   elseBody: Item[] | null;
+  trivia?: Trivia;
 }
 
 export interface ForStmt {
@@ -52,12 +92,14 @@ export interface ForStmt {
   stop: Expr;
   step: Expr | null;
   body: Item[];
+  trivia?: Trivia;
 }
 
 export interface WhileStmt {
   type: "while";
   cond: Expr;
   body: Item[];
+  trivia?: Trivia;
 }
 
 /** `local name = expr`. Unlike `@name = expr`, this binding is reassignable via a later `name = expr` leaf (scorium-spec §1 "Reassignment"). */
@@ -65,11 +107,13 @@ export interface LocalStmt {
   type: "local";
   name: string;
   value: Expr;
+  trivia?: Trivia;
 }
 
 export interface ReturnStmt {
   type: "return";
   value: Expr | null;
+  trivia?: Trivia;
 }
 
 export interface FnDef {
@@ -77,12 +121,14 @@ export interface FnDef {
   name: string;
   params: string[];
   body: Item[];
+  trivia?: Trivia;
 }
 
 /** A call expression used as a full statement (`ItemKind::Call` in scorium-rust). */
 export interface ExprStmt {
   type: "exprstmt";
   expr: Expr;
+  trivia?: Trivia;
 }
 
 /** A bare string's parts: literal text interleaved with `$name` interpolation (scorium-spec §1). */
