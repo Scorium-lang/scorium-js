@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.0-dev — unreleased
+
+Sandbox resource limits (scorium-spec §3/§6): a total loop-iteration
+budget shared across the whole evaluation and a function call-depth
+limit, both configurable via `evaluate(doc, { sandbox })`, defaulting
+to scorium-rust's own values. And structured diagnostics: every error
+is now a `ScoriumError` (`LexError`/`ParseError`/`EvalError`) exposing
+a real `.code` field, extracted from the existing message-text
+convention rather than requiring every throw site to change.
+
+Turning on precise `.code` checking in the conformance runner (in
+place of the looser `message.includes(code)` it used before)
+immediately caught a real gap: `Value`'s integer-overflow check threw
+a plain `Error`, not an `EvalError` -- invisible under substring
+matching, since the code text still appeared in the message, but a
+real bug for anyone catching on `.code` or `instanceof EvalError`.
+Fixed.
+
+31/31 fixtures in the entire `scorium-spec` conformance corpus now
+pass, including `sandbox/` -- safe to run for the first time now that
+the limits it exercises actually exist (confirmed: still under a
+second to run the whole suite). The full non-Lua language core is
+implemented.
+
 ## 0.6.0-dev — unreleased
 
 The canonical formatter (`scorium-spec §4`): comment/blank-line trivia

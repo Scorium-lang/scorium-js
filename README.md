@@ -1,6 +1,7 @@
 # scorium (scorium-js)
 
-**Status: the full non-Lua language core is implemented — see "Current
+**Status: the full non-Lua language core is implemented, including
+sandbox resource limits and structured diagnostics — see "Current
 scope" below. Not published to npm.**
 
 A native TypeScript/JavaScript implementation of the [Scorium][spec]
@@ -63,15 +64,28 @@ sandbox). **Implemented so far:**
   raises a clear, explicit error rather than silently no-op'ing or (the
   bug this caught during development) accidentally misparsing the body
   as ordinary Scorium items. See "Not yet implemented" below.
+- Sandbox resource limits (`scorium-spec §3`/`§6`): a total loop-iteration
+  budget shared across the *whole* evaluation (not per-loop) and a
+  function call-depth limit, both configurable via `evaluate(doc, {
+  sandbox: { maxLoopIterations, maxFunctionCallDepth } })`, defaulting to
+  `scorium-rust`'s own values (1,000,000 / 256). Script instruction/memory
+  limits aren't included — they're Lua-specific and no Lua VM is embedded.
+- Structured diagnostics: every thrown error is a `ScoriumError` (via
+  `LexError`/`ParseError`/`EvalError`) exposing a real `.code` field —
+  `scorium::eval::loop_budget_exceeded`, `scorium::eval::type_error`, etc.
+  — extracted from the message text every throw site already used, so
+  callers can branch on `.code` reliably instead of pattern-matching
+  message strings.
 - The `squeezed_operator`, `at_in_expression`, and `dollar_in_expression`
   lex/parse diagnostics, and the `undefined_interpolation`,
   `arithmetic_overflow`, `unknown_function`, `includes_disabled`,
   `include_path_denied`, `include_cycle`, `include_io`, `include_parse`,
-  and `script_error` (script execution attempted) eval diagnostics (by
-  message content, not yet a structured error type — see below).
+  `script_error`, `loop_budget_exceeded`, and `call_depth_exceeded` eval
+  diagnostics.
 
-**29/29 runnable `scorium-spec` conformance fixtures pass** (see
-"Conformance" below) — the entire non-Lua language core is implemented.
+**31/31 `scorium-spec` conformance fixtures pass — the entire corpus,
+including `sandbox/`** (see "Conformance" below). The full non-Lua
+language core is implemented.
 
 **Not yet implemented** (deferred, not silently unsupported — anything
 outside this should be treated as "not yet built," not "not part of the
@@ -81,24 +95,19 @@ language"):
 - `script {}` *execution* — no Lua VM embedded (the Full-conformance-level
   question from `scorium-spec §7`, itself still unapproved). Parsing and
   formatting a document containing one already works (see above).
-- The rest of the diagnostic code catalog (`scorium-spec §5`) — errors
-  thrown today are plain `Error`s with the `scorium::*` code embedded in
-  the message text, not yet a structured, catchable error type per code.
-- Sandbox resource limits (`scorium-spec §6`).
+- The rest of the diagnostic code catalog (`scorium-spec §5`) beyond the
+  codes listed above.
 
 ## Conformance
 
 `npm run conformance` runs `scripts/conformance.ts` against
-`../scorium-spec/conformance/v0.2.0-draft/{values,evaluation,diagnostics,formatter}/`
+`../scorium-spec/conformance/v0.2.0-draft/{values,evaluation,diagnostics,sandbox,formatter}/`
 (relative sibling checkout — only works when `scorium-spec` is checked
 out alongside this repo, e.g. both under `scorium-lang/`), including
 multi-file `include` fixtures (written to a scratch temp directory per
-fixture). **29/29 passes.**
-
-Running `sandbox/`'s fixtures today would be actively harmful, not just
-unsupported: `sandbox/loop-budget-exceeded.json`'s `while true do ...`
-would hang the process forever, since there's no loop-iteration limit to
-trip. Resource limits need to land before that category is ever run.
+fixture) and `sandbox/`'s resource-limit fixtures, now safe to run since
+the limits they exercise actually exist. **31/31 passes**, runs in well
+under a second.
 
 ## Requirements
 
