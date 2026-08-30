@@ -59,6 +59,31 @@ vendored `scorium-spec` conformance corpus (see
 [`fixtures/README.md`](./fixtures/README.md) if your change needs an
 updated or new fixture).
 
+## Maintainer release process
+
+Releases are published automatically from successful CI runs on `main`.
+Update the version in both `package.json` and `package-lock.json`, then
+merge or push the release commit to `main`. After typechecking, building,
+and conformance testing pass, CI compares the local version with the
+versions already on npm. It publishes only when the local version is newer
+than every published version; otherwise the publish job exits successfully
+without changing npm.
+
+Publishing uses npm Trusted Publishing with GitHub Actions OIDC; no npm
+access token is stored in GitHub. In the npm package settings, configure
+the trusted publisher with these exact values:
+
+- Provider: GitHub Actions
+- Organization or user: `Scorium-lang`
+- Repository: `scorium-js`
+- Workflow filename: `ci.yml`
+- Allowed action: `npm publish`
+
+The `scorium` package must already exist before npm can configure a trusted
+publisher. For the first release only, a maintainer must publish `0.9.0`
+manually with 2FA. Configure Trusted Publishing immediately afterward;
+future versions are then published by CI with short-lived OIDC credentials.
+
 ## Code quality expectations
 
 - **Strict TypeScript.** `tsconfig.json`'s `strict` mode stays on; don't
