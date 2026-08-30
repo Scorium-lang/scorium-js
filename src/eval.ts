@@ -242,7 +242,7 @@ function evalItemInner(item: Item, ctx: EvalCtx): Flow {
       return execInclude(pathVal.value, ctx, item.span);
     }
     case "exprstmt":
-      evalExpr(item.expr, ctx); // side effect only: any entries the callee's body produces land in ctx.sink
+      execCallStmt(item.expr, item.span, ctx);
       return NORMAL;
     case "if": {
       for (const branch of [{ cond: item.cond, body: item.thenBody }, ...item.elifs]) {
@@ -277,6 +277,32 @@ function evalItemInner(item: Item, ctx: EvalCtx): Flow {
     case "return":
       return { kind: "return", value: item.value ? evalExpr(item.value, ctx) : NIL, span: item.span };
   }
+}
+
+/**
+ * A standalone call statement (always a `Call` expression -- the parser
+ * doesn't accept any other shape at statement position). Matches
+ * scorium-rust's `exec_call_stmt`: a call to a *host* function (not a
+ * Scorium `fn`) emits a `hostCall` entry recording its name, arguments,
+ * and result; anything else (a Scorium `fn` call, whose body already
+ * emits its own entries) is just evaluated for its side effect.
+ */
+function execCallStmt(expr: Expr, span: SourceSpan | undefined, ctx: EvalCtx): void {
+  if (expr.type === "call" && expr.callee.type === "ident" && !ctx.functions.has(expr.callee.name)) {
+    const hostFn = ctx.hostFunctions.get(expr.callee.name);
+    if (hostFn) {
+      const args = expr.args.map((a) => evalExpr(a, ctx));
+      let result: Value;
+      try {
+        result = hostFn(args);
+      } catch (err) {
+        throw new EvalError(`scorium::eval::type_error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      ctx.sink.push({ kind: "hostCall", name: expr.callee.name, args, result, span });
+      return;
+    }
+  }
+  evalExpr(expr, ctx); // side effect only: any entries the callee's body produces land in ctx.sink
 }
 
 /**
