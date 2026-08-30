@@ -126,11 +126,8 @@ jobs:
           fi
 
           notes_file="${RUNNER_TEMP}/scorium-release-notes.md"
-          if ! awk -v heading="## ${RELEASE_VERSION}" '
-            index($0, heading) == 1 && (length($0) == length(heading) || substr($0, length(heading) + 1, 1) == " ") {
-              found = 1
-              next
-            }
+          if ! awk -v heading="## [${RELEASE_VERSION}]" '
+            index($0, heading) == 1 { found = 1; next }
             found && /^## / { exit }
             found { print }
             END { if (!found) exit 2 }

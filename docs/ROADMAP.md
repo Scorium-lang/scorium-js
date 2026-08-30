@@ -38,7 +38,9 @@ minor versions.
 - versioned cross-implementation conformance fixtures in CI;
 - ESM npm package with declarations and no runtime dependencies;
 - a `scorium` CLI (`check`/`parse`/`fmt`/`fmt --check`/`eval`), matching
-  `scorium-cli`'s subcommands and generic-runtime framing.
+  `scorium-cli`'s subcommands and generic-runtime framing; `fmt --check`
+  prints a line diff and `eval --json` prints tagged-value JSON, both
+  matching `scorium-cli`.
 
 ## Deferred
 

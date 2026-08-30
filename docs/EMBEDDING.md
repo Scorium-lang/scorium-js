@@ -97,8 +97,14 @@ server {
 type Entry =
   | { kind: "leaf"; key: string; value: Value }
   | { kind: "node"; name: string; header: string | null; children: Entry[] }
-  | { kind: "include"; path: string };
+  | { kind: "include"; path: string }
+  | { kind: "hostCall"; name: string; args: Value[]; result: Value };
 ```
+
+`hostCall` appears only for a standalone call to a *host*-registered
+function used as a full statement (not part of an assignment) --
+matching `scorium-rust`'s `Entry::HostCall`. A call to a Scorium `fn`
+this way produces no such entry, only what the `fn` body itself emits.
 
 Do not immediately convert entries to an object unless duplicate keys and
 repeated nodes have a deliberate policy in your application.
@@ -153,7 +159,75 @@ Every host function is a capability granted to the configuration. Prefer
 pure functions, validate arguments, and do not expose process, network,
 secret, or unrestricted filesystem access by accident.
 
-## 4. Includes
+## 4. Validate against a schema
+
+```ts
+import { NodeSchema, Schema, evaluate, parse } from "scorium";
+
+const schema = Schema.builder()
+  .node(
+    "server",
+    NodeSchema.builder()
+      .requiredKey("host", "string")
+      .requiredKey("port", "integer")
+      .key("timeout", "duration")
+      .key("enabled", "boolean")
+      .build(),
+  )
+  .build();
+
+const result = schema.validate(evaluate(parse(source)));
+if (result.isValid()) {
+  console.log("configuration is valid");
+} else {
+  for (const error of result.errors) console.error(error.format());
+}
+```
+
+`validate` collects **every** problem, not just the first. Each
+`SchemaError` carries a `scorium::schema::*` code matching
+`scorium-rs`'s `scorium-schema` crate exactly, a structured span, and --
+for unknown nodes and keys -- a Levenshtein-based typo `suggestion`.
+
+### Built-in value types
+
+`"string" | "integer" | "float" | "boolean" | "color" | "duration" |
+"any"`. `"float"` accepts an `int` value too (it's promoted, matching
+`scorium-rust`'s numeric-widening rule). `listOf(valueType)` checks each
+element. `"any"` accepts any typed value.
+
+### Custom host-defined types
+
+A host can add a validation type that runs its own logic on an
+already-parsed `Value`:
+
+```ts
+import { Schema, customType } from "scorium";
+
+const percentage = customType("percentage", (value) => {
+  if (value.kind === "int" && value.value >= 0n && value.value <= 100n) return true;
+  if (value.kind === "float" && value.value >= 0 && value.value <= 100) return true;
+  return `expected a percentage 0..100, found ${value.kind}`;
+});
+
+const schema = Schema.builder().key("opacity", percentage).build();
+```
+
+> Scope note. A custom type validates a **value that already parsed** as
+> one of Scorium's core literals -- it does not add new lexer syntax.
+> Bespoke literal *syntax* (a token shape the lexer parses directly for a
+> host) is deferred; see ROADMAP.md.
+
+### Duplicate-key policy
+
+```ts
+NodeSchema.builder()
+  .key("port", "integer")
+  .duplicateKeyPolicy("error") // default; or "last-wins", "first-wins"
+  .build();
+```
+
+## 5. Includes
 
 Set `baseDir` to the directory containing the entry file:
 
@@ -176,7 +250,7 @@ Evaluation and includes currently use Node's synchronous filesystem APIs,
 so evaluate on a worker or during configuration loading rather than in a
 latency-sensitive request handler.
 
-## 5. Resource limits
+## 6. Resource limits
 
 ```ts
 const entries = evaluate(document, {
@@ -194,7 +268,7 @@ including included files and nested blocks.
 There are no script instruction or Lua-memory options because this package
 does not execute `script { }`.
 
-## 6. Format
+## 7. Format
 
 ```ts
 import { format, parse } from "scorium";
@@ -217,8 +291,8 @@ A host can implement transactional reloads with the staged API:
 4. compare the old and new entry trees;
 5. apply changes only after successful validation.
 
-`scorium-js` does not currently ship a schema validator. Validation is a
-host responsibility; the Rust project provides a separate schema crate.
+Step 2 is the `Schema`/`NodeSchema` API from "4. Validate against a
+schema" above.
 
 ## Public API at a glance
 
@@ -232,4 +306,5 @@ host responsibility; the Rust project provides a separate schema crate.
 | `Entry`, `Value` | Evaluation output |
 | `EvalOptions`, `IncludePolicy`, `SandboxOptions` | Host policy |
 | `HostFunction` | Host call contract |
+| `Schema`, `NodeSchema`, `SchemaError`, `customType`, `listOf` | Schema validation |
 | `FormatOptions` | Formatter indentation |

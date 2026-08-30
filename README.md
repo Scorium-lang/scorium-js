@@ -123,16 +123,24 @@ if (!result.isValid()) {
 ## CLI
 
 ```bash
-npx scorium check config.scor   # parse + evaluate; report diagnostics
-npx scorium parse config.scor   # print the parsed syntax tree
-npx scorium fmt config.scor     # format in place
-npx scorium fmt --check config.scor
-npx scorium eval config.scor    # print the evaluated configuration tree
+npx scorium check config.scor         # parse + evaluate; report diagnostics
+npx scorium parse config.scor         # print the parsed syntax tree
+npx scorium fmt config.scor           # format in place
+npx scorium fmt --check config.scor   # exit non-zero + print a diff if unformatted
+npx scorium eval config.scor          # print the evaluated configuration tree
+npx scorium eval config.scor --json   # ...or as tagged-value JSON
 ```
 
 `check` and `eval` run against a *generic* runtime -- no host functions or
 schema attached, mirroring `scorium-cli`'s framing; an embedding
-application supplies those itself.
+application supplies those itself. Try it against
+[`examples/basic.scor`](./examples/basic.scor),
+[`variables.scor`](./examples/variables.scor),
+[`conditions.scor`](./examples/conditions.scor), or
+[`loops.scor`](./examples/loops.scor). A complete embedding -- parse,
+evaluate with a registered host value and function, validate against a
+schema, inspect -- is in [`examples/embedding/`](./examples/embedding/);
+run it with `node examples/embedding/main.ts`.
 
 ## Current scope
 
