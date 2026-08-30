@@ -1,4 +1,4 @@
-import type { BinOp, Document, Expr, HeaderValue, Item } from "./ast.ts";
+import type { BinOp, Comment, Document, Expr, HeaderValue, Item } from "./ast.ts";
 import { Lexer } from "./lexer.ts";
 import type { Token, TokenKind } from "./token.ts";
 
@@ -33,9 +33,6 @@ class Parser {
   private advance(): Token {
     return this.tokens[this.i++]!;
   }
-  private skipNewlines(): void {
-    while (this.peek().kind === "newline") this.advance();
-  }
   private expect(kind: Token["kind"]): Token {
     const tok = this.peek();
     if (tok.kind !== kind) {
@@ -45,29 +42,67 @@ class Parser {
   }
 
   parseDocument(): Document {
-    const items: Item[] = [];
-    this.skipNewlines();
-    while (this.peek().kind !== "eof") {
-      items.push(this.parseItem());
-      if (this.peek().kind !== "eof") this.expect("newline");
-      this.skipNewlines();
-    }
-    return { items };
+    const { items, trailing } = this.parseItemsAndTrailing(["eof"]);
+    return { items, trailing };
   }
 
-  /** Parses items until one of `stops` is next, requiring a newline between consecutive items (matches parseDocument's own top-level rule). */
+  /** Parses items until one of `stops` is next, requiring a newline between consecutive items (matches parseDocument's own top-level rule). Discards any dangling comments right before the stop token (e.g. just before `end`) -- not attached anywhere in this AST, a minor known gap (no fixture exercises it). */
   private parseBodyUntil(stops: TokenKind[]): Item[] {
+    return this.parseItemsAndTrailing(stops).items;
+  }
+
+  /** Collects leading comments and a blank-line flag before each item, and a trailing same-line comment after it, attaching both as `item.trivia` (scorium-spec §4) -- purely for the formatter; evaluation ignores it. */
+  private parseItemsAndTrailing(stops: TokenKind[]): { items: Item[]; trailing: Comment[] } {
     const items: Item[] = [];
-    this.skipNewlines();
-    while (!stops.includes(this.peek().kind)) {
-      if (this.peek().kind === "eof") {
+    for (;;) {
+      const { leading, blankLineBefore } = this.collectLeadingTrivia();
+      const kind = this.peek().kind;
+      if (stops.includes(kind)) return { items, trailing: leading };
+      if (kind === "eof") {
         throw new ParseError("scorium::parse::unexpected_eof: unexpected end of file inside a block");
       }
-      items.push(this.parseItem());
-      if (!stops.includes(this.peek().kind)) this.expect("newline");
-      this.skipNewlines();
+      const item = this.parseItem();
+      let trailing: Comment | null = null;
+      if (this.peek().kind === "comment") {
+        const t = this.advance();
+        trailing = { text: t.commentText!, block: t.commentBlock! };
+      }
+      item.trivia = { leading, trailing, blankLineBefore };
+      items.push(item);
+      // Require a separator, but don't consume it here -- the next
+      // loop's collectLeadingTrivia must see and count it, or a blank
+      // line right after this item would be lost (consuming exactly
+      // one newline here, before that count runs, undercounts a
+      // following "\n\n" down to a single newline every time).
+      const after = this.peek().kind;
+      if (!stops.includes(after) && after !== "eof" && after !== "newline") {
+        throw new ParseError(`scorium::parse::unexpected_token: expected newline, found ${after} (${JSON.stringify(this.peek().text)}) at offset ${this.peek().pos}`);
+      }
     }
-    return items;
+  }
+
+  /** Consumes any run of newlines/comments before the next item, returning the comments as leading trivia and whether at least one blank line (2+ consecutive newlines) appeared anywhere in that run. */
+  private collectLeadingTrivia(): { leading: Comment[]; blankLineBefore: boolean } {
+    const leading: Comment[] = [];
+    let blankLineBefore = false;
+    let run = 0;
+    for (;;) {
+      const kind = this.peek().kind;
+      if (kind === "newline") {
+        run++;
+        if (run >= 2) blankLineBefore = true;
+        this.advance();
+        continue;
+      }
+      if (kind === "comment") {
+        const t = this.advance();
+        leading.push({ text: t.commentText!, block: t.commentBlock! });
+        run = 0;
+        continue;
+      }
+      break;
+    }
+    return { leading, blankLineBefore };
   }
 
   private parseItem(): Item {
@@ -94,7 +129,7 @@ class Parser {
       }
       case "return": {
         this.advance();
-        const stopsHere = ["newline", "eof", "end", "rbrace"] as TokenKind[];
+        const stopsHere = ["newline", "eof", "end", "rbrace", "comment"] as TokenKind[];
         const value = stopsHere.includes(this.peek().kind) ? null : this.parseExpr();
         return { type: "return", value };
       }
@@ -104,6 +139,11 @@ class Parser {
         this.advance();
         const path = this.parsePrimary();
         return { type: "include", path };
+      }
+      case "script": {
+        this.advance();
+        const bodyTok = this.expect("rawscript");
+        return { type: "script", raw: bodyTok.scriptRaw! };
       }
     }
 
