@@ -1,3 +1,5 @@
+import { EvalError } from "./errors.ts";
+
 /**
  * Scorium's eight value types (scorium-spec §2). `Int` is backed by
  * `bigint`, not `number` -- a `number` only represents integers exactly
@@ -19,7 +21,7 @@ const INT_MAX = 2n ** 63n - 1n;
 
 export function makeInt(value: bigint): Value {
   if (value < INT_MIN || value > INT_MAX) {
-    throw new Error(`scorium::eval::arithmetic_overflow: ${value} is outside the 64-bit signed integer range`);
+    throw new EvalError(`scorium::eval::arithmetic_overflow: ${value} is outside the 64-bit signed integer range`);
   }
   return { kind: "int", value };
 }
