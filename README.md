@@ -38,9 +38,18 @@ sandbox). **Implemented so far:**
   comparison (`== ~= < > <= >=`, with exact `Int`/`Float` ordering that
   never casts the integer through `f64` first), logic (`and`/`or`
   short-circuiting, `not`), unary negation, and grouping parens.
-- Identifier resolution steps 1 (local/param/loop-var), 2 (`@`-variable),
-  3 (sibling leaf — a leaf emitted earlier in the *same* body), and 5
-  (fallback to a literal string) of `scorium-spec §1`'s 5-step order.
+- **All five steps** of `scorium-spec §1`'s identifier resolution: 1
+  (local/param/loop-var), 2 (`@`-variable), 3 (sibling leaf — a leaf
+  emitted earlier in the *same* body), 4 (host value, via
+  `evaluate(doc, { hostValues })`), and 5 (fallback to a literal string).
+- A host function/value registry (`evaluate(doc, { hostFunctions,
+  hostValues })`) — "one registry, multiple surfaces" (scorium-spec §6):
+  a host function is callable exactly like a Scorium `fn` (`f(a, b)`), a
+  host value resolves as a plain identifier. A Scorium `fn` of the same
+  name takes priority over a host function, matching `scorium-rust`'s own
+  precedence. A throw inside a host function is wrapped as
+  `scorium::eval::type_error`, matching `scorium-rust`'s
+  `Result<Value, String>` host-function contract.
 - Control flow (`if`/`elseif`/`else`, numeric `for` with optional step,
   `while`), `local` and the leaf-reassignment rule (`n = n + 1` updates
   an existing `local`, but — confirmed against a real `scorium-rust`
@@ -85,18 +94,24 @@ sandbox). **Implemented so far:**
 
 **31/31 `scorium-spec` conformance fixtures pass — the entire corpus,
 including `sandbox/`** (see "Conformance" below). The full non-Lua
-language core is implemented.
+language core, including all five identifier-resolution steps and host
+integration, is implemented.
 
 **Not yet implemented** (deferred, not silently unsupported — anything
 outside this should be treated as "not yet built," not "not part of the
 language"):
 
-- Identifier resolution step 4 (host values) — no host registry yet.
 - `script {}` *execution* — no Lua VM embedded (the Full-conformance-level
   question from `scorium-spec §7`, itself still unapproved). Parsing and
-  formatting a document containing one already works (see above).
+  formatting a document containing one already works (see above). This is
+  the only remaining gap in the language core.
 - The rest of the diagnostic code catalog (`scorium-spec §5`) beyond the
   codes listed above.
+- No host-integration conformance fixtures exist yet in `scorium-spec`
+  (a deliberately separate, undesigned corpus per its own
+  `conformance/README.md`) — the host registry above is verified against
+  `scorium-rust`'s own equivalent tests (`select()`, `environment`), not
+  against a fixture.
 
 ## Conformance
 

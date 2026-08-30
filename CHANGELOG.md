@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.8.0-dev — unreleased
+
+The host function/value registry (scorium-spec §6's "one registry,
+multiple surfaces"): `evaluate(doc, { hostFunctions, hostValues })`.
+A host function is callable exactly like a Scorium `fn`, with a
+Scorium `fn` of the same name taking priority (matches scorium-rust's
+own precedence); a host value resolves as a plain identifier --
+identifier resolution step 4, the last of the five steps in
+scorium-spec §1 to land. A throw inside a host function is wrapped as
+`scorium::eval::type_error`, matching scorium-rust's
+`Result<Value, String>` host-function contract.
+
+No conformance fixture exists for this yet (host-integration fixtures
+are a deliberately separate, undesigned corpus per scorium-spec's own
+conformance/README.md), so this was verified directly against
+scorium-rust's own equivalent tests instead (`select()` returning its
+first argument, an `environment` host value driving an `if`/`else`,
+and a Scorium `fn` shadowing a same-named host function).
+
+31/31 `scorium-spec` conformance fixtures still pass (unaffected --
+no fixture exercises this path). The language core, including every
+identifier-resolution step, is now complete; only `script {}`
+execution remains, gated on scorium-spec §7.
+
 ## 0.7.0-dev — unreleased
 
 Sandbox resource limits (scorium-spec §3/§6): a total loop-iteration
