@@ -5,13 +5,12 @@ import { join } from "node:path";
 import { parse } from "../src/parser.ts";
 import { evaluate } from "../src/eval.ts";
 import { format } from "../src/format.ts";
+import { ScoriumError } from "../src/errors.ts";
 import type { Entry } from "../src/entry.ts";
 import { decodeEntries, entriesEqual } from "../src/fixture-codec.ts";
 
-// sandbox/ isn't run: no resource limits implemented yet, and running
-// its fixtures today would hang the process (an unbounded `while true`).
 const SPEC_ROOT = join(import.meta.dirname, "..", "..", "scorium-spec", "conformance", "v0.2.0-draft");
-const CATEGORIES = ["values", "evaluation", "diagnostics"];
+const CATEGORIES = ["values", "evaluation", "diagnostics", "sandbox"];
 
 let pass = 0;
 let fail = 0;
@@ -47,14 +46,14 @@ for (const category of CATEGORIES) {
         console.log(`FAIL  ${label}  ${fixture.name}`);
         console.log(`      expected error ${fixture.expect_error.code}, but evaluation succeeded`);
       } catch (err) {
-        const msg = (err as Error).message;
-        if (msg.includes(fixture.expect_error.code)) {
+        const code = err instanceof ScoriumError ? err.code : undefined;
+        if (code === fixture.expect_error.code) {
           pass++;
           console.log(`PASS  ${label}  ${fixture.name}`);
         } else {
           fail++;
           console.log(`FAIL  ${label}  ${fixture.name}`);
-          console.log(`      expected error code ${fixture.expect_error.code}, got: ${msg}`);
+          console.log(`      expected error code ${fixture.expect_error.code}, got code ${code ?? "(non-ScoriumError)"}: ${(err as Error).message}`);
         }
       }
       continue;
