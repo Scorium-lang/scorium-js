@@ -1,6 +1,6 @@
 # scorium (scorium-js)
 
-**Status: early draft. Declarative literal subset only — see "Current
+**Status: the full non-Lua language core is implemented — see "Current
 scope" below. Not published to npm.**
 
 A native TypeScript/JavaScript implementation of the [Scorium][spec]
@@ -48,21 +48,24 @@ sandbox). **Implemented so far:**
   expression-position, plain-identifier or member callees).
 - Member/method calls (`primary.darken(1.0)`) — the color methods
   (`darken`/`lighten`/`alpha`), the only value type with methods.
+- `include`, with path containment enforced on the canonicalized
+  (symlink-resolved) path per `scorium-spec §6` — not just a textual
+  `..`/absolute-path check — and cycle detection.
 - The `squeezed_operator`, `at_in_expression`, and `dollar_in_expression`
   lex/parse diagnostics, and the `undefined_interpolation`,
-  `arithmetic_overflow`, and `unknown_function` eval diagnostics (by
-  message content, not yet a structured error type — see below).
+  `arithmetic_overflow`, `unknown_function`, `includes_disabled`,
+  `include_path_denied`, `include_cycle`, `include_io`, and
+  `include_parse` eval diagnostics (by message content, not yet a
+  structured error type — see below).
 
-**21/21 runnable `scorium-spec` conformance fixtures pass** (see
-"Conformance" below) — the entire non-Lua language core except
-`include` is implemented.
+**23/23 runnable `scorium-spec` conformance fixtures pass** (see
+"Conformance" below) — the entire non-Lua language core is implemented.
 
 **Not yet implemented** (deferred, not silently unsupported — anything
 outside this should be treated as "not yet built," not "not part of the
 language"):
 
 - Identifier resolution step 4 (host values) — no host registry yet.
-- `include`.
 - `script {}` / Lua (the Full-conformance-level question from
   `scorium-spec §7`, itself still unapproved — not started either way).
 - The canonical formatter (`scorium-spec §4`).
@@ -76,11 +79,15 @@ language"):
 `npm run conformance` runs `scripts/conformance.ts` against
 `../scorium-spec/conformance/v0.2.0-draft/{values,evaluation,diagnostics}/`
 (relative sibling checkout — only works when `scorium-spec` is checked
-out alongside this repo, e.g. both under `scorium-lang/`). `formatter/`
-and `sandbox/` are skipped entirely (no formatter, no resource limits
-yet); multi-file (`include`) fixtures are skipped individually (2 —
-both need `include`, the only remaining gap). 21/21 of everything else
-passes.
+out alongside this repo, e.g. both under `scorium-lang/`), including
+multi-file `include` fixtures (written to a scratch temp directory per
+fixture). `formatter/` and `sandbox/` aren't run yet (no formatter, no
+resource limits). **23/23 passes.**
+
+Running `sandbox/`'s fixtures today would be actively harmful, not just
+unsupported: `sandbox/loop-budget-exceeded.json`'s `while true do ...`
+would hang the process forever, since there's no loop-iteration limit to
+trip. Resource limits need to land before that category is ever run.
 
 ## Requirements
 

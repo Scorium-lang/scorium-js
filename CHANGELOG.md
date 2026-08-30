@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0-dev — unreleased
+
+`include`: file reading, cycle detection, and path-containment policy
+per `scorium-spec §6` -- canonicalize (resolve symlinks) both the
+include root and the resolved target and require containment, not
+just a textual `..`/absolute-path check, since a relative path can
+still escape through a symlink. `evaluate()` now takes an optional
+`{ baseDir, includePolicy }`.
+
+23/23 runnable `scorium-spec` conformance fixtures now pass (up from
+21/21 -- both `include` fixtures, previously skipped for lack of
+multi-file support, now run for real). The entire non-Lua language
+core is implemented; remaining work is the formatter, the rest of the
+diagnostic catalog, and sandbox resource limits.
+
 ## 0.4.0-dev — unreleased
 
 Member/method calls (`primary.darken(1.0)`) and, discovered while
