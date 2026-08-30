@@ -9,6 +9,20 @@ versions.
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-08-30
+
+### Fixed
+
+- `scorium --version` printed `"unknown"` when run standalone (`npx
+  scorium --version`, or any invocation outside an `npm run` script
+  context) -- it read `process.env.npm_package_version`, which npm only
+  sets inside its own script-execution environment. Found by actually
+  running `npx scorium@0.9.4 --version` against the just-published
+  package rather than assuming the publish succeeding meant the binary
+  worked. Now reads the version from `package.json` directly, resolved
+  relative to the CLI's own file location (works identically from
+  `src/cli.ts` in dev and `dist/cli.js` once published).
+
 ## [0.9.4] - 2026-08-30
 
 ### Fixed

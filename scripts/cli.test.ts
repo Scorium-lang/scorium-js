@@ -116,3 +116,13 @@ test("no arguments prints usage and exits non-zero", () => {
   assert.equal(result.status, 1);
   assert.match(result.stdout, /Usage:/);
 });
+
+test("`scorium --version` reports the real package version, not \"unknown\"", () => {
+  // Regression: this used to read process.env.npm_package_version, which
+  // only exists inside an `npm run` script context -- run() here spawns
+  // the CLI directly, the same way `npx scorium` does, and caught this
+  // reporting "unknown" for real once published.
+  const result = run(["--version"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
+});

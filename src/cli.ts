@@ -16,7 +16,7 @@
  *                                  conformance fixtures (conformance/README.md)
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 import { evaluate } from "./eval.ts";
 import { ScoriumError } from "./errors.ts";
@@ -259,6 +259,23 @@ function usage(): string {
   ].join("\n");
 }
 
+/**
+ * Reads this package's own version from package.json, one directory up
+ * from this file whether running from src/ (dev, no build) or dist/
+ * (published) -- `process.env.npm_package_version` only exists inside an
+ * `npm run` script context, not for a directly invoked/npx'd binary, so
+ * it can't be used here.
+ */
+function packageVersion(): string {
+  try {
+    const pkgPath = join(import.meta.dirname, "..", "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 function main(argv: string[]): number {
   const [command, ...rest] = argv;
   if (!command || command === "--help" || command === "-h") {
@@ -266,7 +283,7 @@ function main(argv: string[]): number {
     return command ? 0 : 1;
   }
   if (command === "--version") {
-    console.log(process.env.npm_package_version ?? "unknown");
+    console.log(packageVersion());
     return 0;
   }
 
