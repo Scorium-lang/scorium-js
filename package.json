@@ -7,6 +7,9 @@
   "license": "PolyForm-Strict-1.0.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "scorium": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -21,7 +24,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js",
     "prepublishOnly": "npm run build",
     "conformance": "node scripts/conformance.ts",
     "test": "node --test scripts/*.test.ts && node scripts/conformance.ts"

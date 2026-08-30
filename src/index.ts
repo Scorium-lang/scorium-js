@@ -8,4 +8,25 @@ export type { Document, Item, LeafDecl, NodeDecl, VarDef, Expr, HeaderValue, Str
 export type { Value } from "./value.ts";
 export type { Entry } from "./entry.ts";
 export type { SourceFile, SourceLocation, SourceSpan } from "./source.ts";
+export {
+  NodeSchema,
+  NodeSchemaBuilder,
+  Schema,
+  SchemaBuilder,
+  SchemaError,
+  ValidationResult,
+  customType,
+  listOf,
+  validate,
+} from "./schema.ts";
+export type {
+  BuiltinValueType,
+  CustomValueType,
+  DuplicateKeyPolicy,
+  HeaderValidator,
+  KeySchema,
+  ListValueType,
+  ValidateOptions,
+  ValueType,
+} from "./schema.ts";
 export { SCORIUM_LANGUAGE_VERSION } from "./version.ts";

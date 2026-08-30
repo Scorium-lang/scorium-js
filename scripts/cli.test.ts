@@ -1,0 +1,88 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+const CLI = join(import.meta.dirname, "..", "src", "cli.ts");
+
+function run(args: string[]): { status: number; stdout: string; stderr: string } {
+  try {
+    const stdout = execFileSync(process.execPath, [CLI, ...args], { encoding: "utf8" });
+    return { status: 0, stdout, stderr: "" };
+  } catch (error) {
+    const e = error as { status: number | null; stdout: string; stderr: string };
+    return { status: e.status ?? 1, stdout: e.stdout, stderr: e.stderr };
+  }
+}
+
+test("`scorium check` reports a well-formed document as ok", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const file = join(dir, "demo.scor");
+  writeFileSync(file, 'name = "demo"\n');
+  try {
+    const result = run(["check", file]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /ok \(1 entries/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("`scorium check` reports a diagnostic and exits non-zero", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const file = join(dir, "bad.scor");
+  writeFileSync(file, "bad = 1s + 1s\n");
+  try {
+    const result = run(["check", file]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /scorium::eval::type_error/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("`scorium fmt --check` fails on unformatted input, `scorium fmt` fixes it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const file = join(dir, "unformatted.scor");
+  writeFileSync(file, "name=1\n");
+  try {
+    const checkResult = run(["fmt", "--check", file]);
+    assert.equal(checkResult.status, 1);
+
+    const fmtResult = run(["fmt", file]);
+    assert.equal(fmtResult.status, 0);
+    assert.equal(readFileSync(file, "utf8"), "name = 1\n");
+
+    const recheck = run(["fmt", "--check", file]);
+    assert.equal(recheck.status, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("`scorium eval` prints the evaluated tree as an indented outline", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const file = join(dir, "eval.scor");
+  writeFileSync(file, 'server {\n    port = 8080\n}\n');
+  try {
+    const result = run(["eval", file]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /server \{\n {2}port = 8080\n\}/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an unknown command exits non-zero with usage on stderr", () => {
+  const result = run(["frobnicate", "x.scor"]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /unknown command/);
+});
+
+test("no arguments prints usage and exits non-zero", () => {
+  const result = run([]);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /Usage:/);
+});

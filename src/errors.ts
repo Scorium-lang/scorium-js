@@ -35,7 +35,11 @@ export class ScoriumError extends Error {
 
   /** Adds source information at the layer that knows it, without replacing a more precise inner diagnostic. */
   attachContext(context: DiagnosticContext): this {
-    if (this.span || !context.source || !context.span) return this;
+    if (this.span || !context.span) return this;
+    if (!context.source) {
+      this.span = { ...context.span };
+      return this;
+    }
     this.sourceName = context.source.name;
     this.sourceText = context.source.text;
     this.span = {
