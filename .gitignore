@@ -1,4 +1,19 @@
 node_modules/
 dist/
 *.tgz
+
+# Local agent tooling
 AGENTS.md
+CLAUDE.md
+.claude/
+
+# IDEs and editors
+.cursor/
+.fleet/
+.idea/
+.vscode/
+.zed/
+*.iml
+
+# OS metadata
+.DS_Store
