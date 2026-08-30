@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0-dev — unreleased
+
+Control flow (`if`/`elseif`/`else`, numeric `for` with optional step,
+`while`), `local` + leaf-reassignment, `fn` definitions, and calls
+(statement- and expression-position). Reassignment correctly excludes
+function parameters and `for` loop variables (only a genuine `local`
+is reassignable via `n = n + 1`) — verified against a real
+`scorium-rust` edge case where a leaf name colliding with a fn
+parameter must still emit, not silently vanish.
+
+20/21 runnable `scorium-spec` conformance fixtures now pass (up from
+16/21); the one failure needs member/method calls (`color.darken()`),
+the last missing postfix-expression form.
+
 ## 0.2.0-dev — unreleased
 
 Variables (`@name`) and full expressions: arithmetic (checked `Int`
