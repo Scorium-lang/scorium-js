@@ -155,12 +155,16 @@ detection), the canonical formatter, sandbox resource limits, schema
 validation, and structured `.code`-bearing diagnostics with source spans,
 line/column locations, and a `.format()` excerpt.
 
-**Not implemented:** `script { }` *execution* -- no Lua VM is embedded.
-A document containing one still parses and formats correctly; evaluating
-it raises a clear error rather than silently doing nothing. Whether and
-how scorium-js ever executes Lua is a family-wide decision tracked in
-the implementation's host and sandbox strategy; stable Scorium `0.2.0`
-explicitly permits implementations without Lua execution.
+**Not implemented, and not currently planned:** `script { }` *execution*
+-- no Lua VM is embedded. A document containing one still parses and
+formats correctly; evaluating it raises a clear error rather than
+silently doing nothing. `scorium-js` is deliberately frozen at
+`scorium-spec` §7's "Core" scope (the full language minus `script { }`)
+until there's real evidence Lua is worth the cost; `scorium-go` is the
+project's designated vehicle for gathering that evidence against a real
+consumer. If Lua is ever added here, it should ship as an optional
+capability a consumer opts into, not a dependency this base package
+always carries.
 
 ## Status
 

@@ -48,10 +48,13 @@ These are directions, not release promises.
 
 ### Language-family decisions
 
-- **`script { }` execution.** No Lua VM is embedded. Stable Scorium `0.2.0`
-  makes this an optional capability. Adding it here requires a suitable Lua
-  runtime and a sandbox/security review. Before then, the raw-script scanner
-  also needs to account for braces inside Lua strings and comments.
+- **`script { }` execution -- frozen, not just deferred.** No Lua VM is
+  embedded, and none is currently planned. `scorium-js` stays at
+  `scorium-spec` §7's "Core" scope until `scorium-go` gathers real
+  evidence (built Core-only, run against a real consumer) that Lua is
+  actually worth adding. If that evidence justifies it, the intent is
+  to ship it as an optional capability a consumer opts into, not a
+  dependency the base package always carries.
 - **Host-pluggable literal syntax.** Hosts can supply values and functions,
   but cannot register new lexer token shapes.
 - **Generic iteration.** Only numeric `for` is specified.
