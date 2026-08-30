@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.9.0-dev — unreleased
+## 0.9.0 — 2026-08-30
+
+First published release, to npm as `scorium`. Dropped the `-dev` suffix
+this version carried during development -- npm refuses to publish a
+prerelease-suffixed version to the default `latest` dist-tag, and
+`npm install scorium` resolving to a working, unsuffixed version was
+the point.
 
 Publish-readiness. Vendored the `scorium-spec` conformance fixtures
 into `fixtures/` (it has no GitHub repo of its own yet, so CI can't
