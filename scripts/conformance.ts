@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "../src/parser.ts";
 import { evaluate } from "../src/eval.ts";
+import { format } from "../src/format.ts";
 import type { Entry } from "../src/entry.ts";
 import { decodeEntries, entriesEqual } from "../src/fixture-codec.ts";
 
-// formatter/ and sandbox/ are separate concerns (no formatter, no
-// resource limits yet), so they're not run here.
+// sandbox/ isn't run: no resource limits implemented yet, and running
+// its fixtures today would hang the process (an unbounded `while true`).
 const SPEC_ROOT = join(import.meta.dirname, "..", "..", "scorium-spec", "conformance", "v0.2.0-draft");
 const CATEGORIES = ["values", "evaluation", "diagnostics"];
 
@@ -70,6 +71,31 @@ for (const category of CATEGORIES) {
         console.log(`FAIL  ${label}  ${fixture.name}`);
         console.log(`      expected: ${JSON.stringify(expected, bigintReplacer)}`);
         console.log(`      actual:   ${JSON.stringify(actual, bigintReplacer)}`);
+      }
+    } catch (err) {
+      fail++;
+      console.log(`FAIL  ${label}  ${fixture.name}`);
+      console.log(`      threw: ${(err as Error).message}`);
+    }
+  }
+}
+
+{
+  const dir = join(SPEC_ROOT, "formatter");
+  for (const file of readdirSync(dir).sort()) {
+    if (!file.endsWith(".json")) continue;
+    const fixture = JSON.parse(readFileSync(join(dir, file), "utf8"));
+    const label = `formatter/${file}`;
+    try {
+      const actual = format(parse(fixture.input));
+      if (actual === fixture.output) {
+        pass++;
+        console.log(`PASS  ${label}  ${fixture.name}`);
+      } else {
+        fail++;
+        console.log(`FAIL  ${label}  ${fixture.name}`);
+        console.log(`      expected: ${JSON.stringify(fixture.output)}`);
+        console.log(`      actual:   ${JSON.stringify(actual)}`);
       }
     } catch (err) {
       fail++;
