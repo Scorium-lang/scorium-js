@@ -55,13 +55,51 @@ class Parser {
     return { items };
   }
 
+  /** Parses items until one of `stops` is next, requiring a newline between consecutive items (matches parseDocument's own top-level rule). */
+  private parseBodyUntil(stops: TokenKind[]): Item[] {
+    const items: Item[] = [];
+    this.skipNewlines();
+    while (!stops.includes(this.peek().kind)) {
+      if (this.peek().kind === "eof") {
+        throw new ParseError("scorium::parse::unexpected_eof: unexpected end of file inside a block");
+      }
+      items.push(this.parseItem());
+      if (!stops.includes(this.peek().kind)) this.expect("newline");
+      this.skipNewlines();
+    }
+    return items;
+  }
+
   private parseItem(): Item {
-    if (this.peek().kind === "at") {
-      this.advance();
-      const nameTok = this.expect("ident");
-      this.expect("eq");
-      const value = this.parseExpr();
-      return { type: "vardef", name: nameTok.text, value };
+    switch (this.peek().kind) {
+      case "at": {
+        this.advance();
+        const nameTok = this.expect("ident");
+        this.expect("eq");
+        const value = this.parseExpr();
+        return { type: "vardef", name: nameTok.text, value };
+      }
+      case "if":
+        return this.parseIf();
+      case "for":
+        return this.parseFor();
+      case "while":
+        return this.parseWhile();
+      case "local": {
+        this.advance();
+        const nameTok = this.expect("ident");
+        this.expect("eq");
+        const value = this.parseExpr();
+        return { type: "local", name: nameTok.text, value };
+      }
+      case "return": {
+        this.advance();
+        const stopsHere = ["newline", "eof", "end", "rbrace"] as TokenKind[];
+        const value = stopsHere.includes(this.peek().kind) ? null : this.parseExpr();
+        return { type: "return", value };
+      }
+      case "fn":
+        return this.parseFnDef();
     }
 
     const nameTok = this.expect("ident");
@@ -72,20 +110,101 @@ class Parser {
       const value = this.parseExpr();
       return { type: "leaf", key: nameTok.text, value };
     }
+    if (next.kind === "lparen") {
+      return { type: "exprstmt", expr: this.parseCallArgs(nameTok.text) };
+    }
 
     let header: HeaderValue | null = null;
     if (next.kind !== "lbrace" && next.kind !== "newline" && next.kind !== "eof") {
       header = this.parseHeader();
     }
     this.expect("lbrace");
-    this.skipNewlines();
-    const body: Item[] = [];
-    while (this.peek().kind !== "rbrace") {
-      body.push(this.parseItem());
-      this.skipNewlines();
-    }
+    const body = this.parseBodyUntil(["rbrace"]);
     this.expect("rbrace");
     return { type: "node", name: nameTok.text, header, body };
+  }
+
+  private parseIf(): Item {
+    this.expect("if");
+    const cond = this.parseExpr();
+    this.expect("then");
+    const thenBody = this.parseBodyUntil(["elseif", "else", "end"]);
+    const elifs: Array<{ cond: Expr; body: Item[] }> = [];
+    while (this.peek().kind === "elseif") {
+      this.advance();
+      const c = this.parseExpr();
+      this.expect("then");
+      const body = this.parseBodyUntil(["elseif", "else", "end"]);
+      elifs.push({ cond: c, body });
+    }
+    let elseBody: Item[] | null = null;
+    if (this.peek().kind === "else") {
+      this.advance();
+      elseBody = this.parseBodyUntil(["end"]);
+    }
+    this.expect("end");
+    return { type: "if", cond, thenBody, elifs, elseBody };
+  }
+
+  private parseFor(): Item {
+    this.expect("for");
+    const varTok = this.expect("ident");
+    this.expect("eq");
+    const start = this.parseExpr();
+    this.expect("comma");
+    const stop = this.parseExpr();
+    let step: Expr | null = null;
+    if (this.peek().kind === "comma") {
+      this.advance();
+      step = this.parseExpr();
+    }
+    this.expect("do");
+    const body = this.parseBodyUntil(["end"]);
+    this.expect("end");
+    return { type: "for", varName: varTok.text, start, stop, step, body };
+  }
+
+  private parseWhile(): Item {
+    this.expect("while");
+    const cond = this.parseExpr();
+    this.expect("do");
+    const body = this.parseBodyUntil(["end"]);
+    this.expect("end");
+    return { type: "while", cond, body };
+  }
+
+  private parseFnDef(): Item {
+    this.expect("fn");
+    const nameTok = this.expect("ident");
+    this.expect("lparen");
+    const params: string[] = [];
+    if (this.peek().kind !== "rparen") {
+      params.push(this.expect("ident").text);
+      while (this.peek().kind === "comma") {
+        this.advance();
+        params.push(this.expect("ident").text);
+      }
+    }
+    this.expect("rparen");
+    this.expect("lbrace");
+    const body = this.parseBodyUntil(["rbrace"]);
+    this.expect("rbrace");
+    return { type: "fndef", name: nameTok.text, params, body };
+  }
+
+  /** Assumes `lparen` is the next token (the callee name has already been consumed). */
+  private parseCallArgs(name: string): Expr {
+    this.expect("lparen");
+    const args: Expr[] = [];
+    if (this.peek().kind !== "rparen") {
+      args.push(this.parseExpr());
+      while (this.peek().kind === "comma") {
+        this.advance();
+        args.push(this.parseExpr());
+      }
+    }
+    this.expect("rparen");
+    return { type: "call", name, args };
   }
 
   private parseHeader(): HeaderValue {
@@ -210,9 +329,11 @@ class Parser {
       case "barestr":
         this.advance();
         return { type: "str", lit: { kind: "bare", parts: tok.bareParts! } };
-      case "ident":
+      case "ident": {
         this.advance();
+        if (this.peek().kind === "lparen") return this.parseCallArgs(tok.text);
         return { type: "ident", name: tok.text };
+      }
       case "lbracket":
         return this.parseList();
       case "lparen": {
