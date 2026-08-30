@@ -75,6 +75,36 @@ test("`scorium eval` prints the evaluated tree as an indented outline", () => {
   }
 });
 
+test("`scorium eval --json` prints tagged-value JSON matching the conformance encoding", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const file = join(dir, "eval.scor");
+  writeFileSync(file, "port = 8080\n");
+  try {
+    const result = run(["eval", file, "--json"]);
+    assert.equal(result.status, 0);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      type: "entries",
+      value: [{ kind: "leaf", key: "port", value: { type: "int", value: "8080" } }],
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("`scorium fmt --check` prints a line diff of what would change", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const file = join(dir, "unformatted.scor");
+  writeFileSync(file, "name=1\n");
+  try {
+    const result = run(["fmt", "--check", file]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /^- name=1$/m);
+    assert.match(result.stdout, /^\+ name = 1$/m);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("an unknown command exits non-zero with usage on stderr", () => {
   const result = run(["frobnicate", "x.scor"]);
   assert.equal(result.status, 1);

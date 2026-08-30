@@ -5,11 +5,15 @@
  * subcommands and generic-runtime framing (no host functions or schema
  * attached -- an embedding application supplies those).
  *
- *   scorium check <file>        parse + evaluate; report diagnostics
- *   scorium parse <file>        print the parsed syntax tree
- *   scorium fmt <file>          format a file in place
- *   scorium fmt --check <file>  exit non-zero if a file isn't formatted
- *   scorium eval <file>         print the evaluated configuration tree
+ *   scorium check <file>          parse + evaluate; report diagnostics
+ *   scorium parse <file>          print the parsed syntax tree
+ *   scorium fmt <file>            format a file in place
+ *   scorium fmt --check <file>    exit non-zero if a file isn't formatted,
+ *                                  printing a line diff of what would change
+ *   scorium eval <file>           print the evaluated configuration tree
+ *   scorium eval <file> --json    print it as tagged-value JSON instead,
+ *                                  using the same encoding as scorium-spec's
+ *                                  conformance fixtures (conformance/README.md)
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -81,6 +85,7 @@ function runFmt(path: string, check: boolean): number {
   if (check) {
     if (formatted === text) return 0;
     console.error(`${path}: not formatted (run \`scorium fmt ${path}\` to fix)`);
+    printFormatDiff(text, formatted);
     return 1;
   }
   try {
@@ -94,22 +99,111 @@ function runFmt(path: string, check: boolean): number {
   }
 }
 
-function runEval(path: string): number {
+function runEval(path: string, json: boolean): number {
   const text = readSource(path);
   if (text === null) return 1;
   try {
     const doc = parse(text, { sourceName: path });
     const entries = evaluate(doc, { baseDir: dirname(path) });
-    printEntries(entries, 0);
-    console.error(
-      `(evaluated against the generic runtime: ${entries.length} entries; host ` +
-        `functions and schema validation require an embedding application)`,
-    );
+    if (json) {
+      console.log(JSON.stringify({ type: "entries", value: entries.map(entryToJson) }, null, 2));
+    } else {
+      printEntries(entries, 0);
+      console.error(
+        `(evaluated against the generic runtime: ${entries.length} entries; host ` +
+          `functions and schema validation require an embedding application)`,
+      );
+    }
     return 0;
   } catch (error) {
     reportError(error, path);
     return 1;
   }
+}
+
+/**
+ * Encodes an evaluated entry using the same tagged-value JSON scheme
+ * `scorium-spec`'s conformance fixtures use (`conformance/README.md`),
+ * matching `scorium-cli`'s `eval --json` byte-for-byte in shape (modulo
+ * JSON key order) so output is directly comparable across implementations.
+ */
+function entryToJson(entry: Entry): unknown {
+  switch (entry.kind) {
+    case "leaf":
+      return { kind: "leaf", key: entry.key, value: valueToJson(entry.value) };
+    case "node":
+      return { kind: "node", name: entry.name, header: entry.header, children: entry.children.map(entryToJson) };
+    case "include":
+      return { kind: "include", path: entry.path };
+    case "hostCall":
+      return { kind: "hostCall", name: entry.name, args: entry.args.map(valueToJson), result: valueToJson(entry.result) };
+  }
+}
+
+function valueToJson(value: Value): unknown {
+  switch (value.kind) {
+    case "int":
+      return { type: "int", value: value.value.toString() };
+    case "float":
+      return { type: "float", value: formatFloat(value.value) };
+    case "bool":
+      return { type: "bool", value: value.value };
+    case "nil":
+      return { type: "nil" };
+    case "string":
+      return { type: "string", value: value.value };
+    case "color":
+      return { type: "color", value: colorToHex8(value) };
+    case "duration":
+      return { type: "duration", value: durationToString(value) };
+    case "list":
+      return { type: "list", value: value.value.map(valueToJson) };
+  }
+}
+
+/** Matches the fixed tokens `conformance/README.md`'s tagged-value encoding requires for non-finite floats. */
+function formatFloat(f: number): string {
+  if (Number.isNaN(f)) return "nan";
+  if (f === Infinity) return "inf";
+  if (f === -Infinity) return "-inf";
+  return String(f);
+}
+
+/**
+ * A minimal LCS-based line diff, formatted like a compact unified diff.
+ * Good enough for a config file's typical formatter changes (spacing,
+ * comment normalization) without pulling in a diff dependency for one
+ * CLI flag. Mirrors `scorium-cli`'s `print_format_diff`.
+ */
+function printFormatDiff(original: string, formatted: string): void {
+  const a = original.split("\n");
+  const b = formatted.split("\n");
+  const [n, m] = [a.length, b.length];
+  if (n * m > 4_000_000) {
+    console.error("(diff omitted: file too large)");
+    return;
+  }
+  const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i]![j] = a[i] === b[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
+    }
+  }
+  let [i, j] = [0, 0];
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+    } else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) {
+      console.log(`- ${a[i]}`);
+      i++;
+    } else {
+      console.log(`+ ${b[j]}`);
+      j++;
+    }
+  }
+  while (i < n) console.log(`- ${a[i++]}`);
+  while (j < m) console.log(`+ ${b[j++]}`);
 }
 
 /** Mirrors `scorium-cli`'s `print_entries`: an indented outline, not the raw AST/entry Debug shape. */
@@ -122,6 +216,8 @@ function printEntries(entries: readonly Entry[], depth: number): void {
       console.log(entry.header !== null ? `${indent}${entry.name} ${entry.header} {` : `${indent}${entry.name} {`);
       printEntries(entry.children, depth + 1);
       console.log(`${indent}}`);
+    } else if (entry.kind === "hostCall") {
+      console.log(`${indent}${entry.name}(${entry.args.map(formatValue).join(", ")})`);
     } else {
       console.log(`${indent}include "${entry.path}"`);
     }
@@ -154,11 +250,12 @@ function usage(): string {
     "scorium: check, format, parse, and evaluate .scor configuration files",
     "",
     "Usage:",
-    "  scorium check <file>        parse + evaluate; report diagnostics",
-    "  scorium parse <file>        print the parsed syntax tree",
-    "  scorium fmt <file>          format a file in place",
-    "  scorium fmt --check <file>  exit non-zero if a file isn't formatted",
-    "  scorium eval <file>         print the evaluated configuration tree",
+    "  scorium check <file>          parse + evaluate; report diagnostics",
+    "  scorium parse <file>          print the parsed syntax tree",
+    "  scorium fmt <file>            format a file in place",
+    "  scorium fmt --check <file>    exit non-zero if a file isn't formatted",
+    "  scorium eval <file>           print the evaluated configuration tree",
+    "  scorium eval <file> --json    print it as tagged-value JSON instead",
   ].join("\n");
 }
 
@@ -173,8 +270,9 @@ function main(argv: string[]): number {
     return 0;
   }
 
-  const positionals = rest.filter((arg) => arg !== "--check");
+  const positionals = rest.filter((arg) => arg !== "--check" && arg !== "--json");
   const check = rest.includes("--check");
+  const json = rest.includes("--json");
   const path = positionals[0];
   if (!path) {
     console.error(`error: ${command} requires a <file> argument`);
@@ -189,7 +287,7 @@ function main(argv: string[]): number {
     case "fmt":
       return runFmt(path, check);
     case "eval":
-      return runEval(path);
+      return runEval(path, json);
     default:
       console.error(`error: unknown command \`${command}\`\n`);
       console.error(usage());
