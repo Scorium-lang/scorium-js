@@ -33,6 +33,17 @@ export type TokenKind =
   | "and"
   | "or"
   | "not"
+  | "if"
+  | "then"
+  | "elseif"
+  | "else"
+  | "end"
+  | "for"
+  | "do"
+  | "while"
+  | "local"
+  | "return"
+  | "fn"
   | "newline"
   | "eof";
 
