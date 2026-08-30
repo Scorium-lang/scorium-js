@@ -46,6 +46,9 @@ export type TokenKind =
   | "return"
   | "fn"
   | "include"
+  | "script"
+  | "rawscript"
+  | "comment"
   | "newline"
   | "eof";
 
@@ -60,6 +63,9 @@ export interface Token {
   durationUnit?: string;
   stringValue?: string;
   bareParts?: BarePart[];
+  commentText?: string;
+  commentBlock?: boolean;
+  scriptRaw?: string;
   pos: number;
   /** True if this operator token had no whitespace on either side -- a lex error for everything except `+`/`-`. */
   squeezed?: boolean;
