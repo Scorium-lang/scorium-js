@@ -1,4 +1,4 @@
-import type { Document, Expr, Item } from "./ast.ts";
+import type { BinOp, Document, Expr, FnDef, Item, UnOp } from "./ast.ts";
 import type { Entry } from "./entry.ts";
 import { makeInt, type Value } from "./value.ts";
 
@@ -6,44 +6,156 @@ export class EvalError extends Error {}
 
 const I64_MIN_AS_F64 = -9223372036854775808.0;
 const I64_MAX_PLUS_ONE_AS_F64 = 9223372036854775808.0;
-
-/** A flat variable scope: `@`-definitions visible to later items in the same or an enclosing scope (scorium-spec §3). */
-type Scope = Map<string, Value>;
+const NIL: Value = { kind: "nil" };
 
 /**
- * Evaluates variables + full expressions on top of the declarative
- * subset (scorium-spec §1-3). Identifier resolution implements only
- * steps 2 (`@`-variable) and 5 (fallback to a literal string) of the
- * 5-step order -- steps 1/3/4 (locals, sibling leaves, host values)
- * need features this build doesn't have yet. See README.md.
+ * A lexical binding. `reassignable` distinguishes a genuine `local`
+ * declaration (updatable via a later `name = expr` leaf, scorium-spec
+ * §1 "Reassignment") from a function parameter or `for`-loop variable,
+ * which is NOT reassignable this way -- confirmed by scorium-rust's own
+ * test: a leaf named the same as a fn parameter still emits a leaf, it
+ * doesn't silently vanish into a no-op self-reassignment.
+ */
+interface Binding {
+  value: Value;
+  reassignable: boolean;
+}
+type Frame = Map<string, Binding>;
+
+interface EvalCtx {
+  /** `@`-variables: one flat scope, global to the whole evaluation, never reassignable. */
+  atVars: Map<string, Value>;
+  /** Locals/params/loop-vars: a stack of block scopes, innermost last. */
+  locals: Frame[];
+  /** `fn` definitions: one flat scope (scorium-rust's own model is flat too). */
+  functions: Map<string, FnDef>;
+  /** Where node/leaf/include entries produced right now are appended -- shared across nested control flow, swapped only when entering a node body. */
+  sink: Entry[];
+}
+
+type Flow = { kind: "normal" } | { kind: "return"; value: Value };
+const NORMAL: Flow = { kind: "normal" };
+
+/**
+ * Evaluates the full non-Lua language core (scorium-spec §1-3), still
+ * missing member/method calls, `include`, and `script {}` -- see
+ * README.md "Current scope".
  */
 export function evaluate(doc: Document): Entry[] {
-  const scope: Scope = new Map();
-  return evalItems(doc.items, scope);
+  const ctx: EvalCtx = { atVars: new Map(), locals: [new Map()], functions: new Map(), sink: [] };
+  evalItems(doc.items, ctx);
+  return ctx.sink;
 }
 
-function evalItems(items: Item[], scope: Scope): Entry[] {
-  const entries: Entry[] = [];
+function evalItems(items: Item[], ctx: EvalCtx): Flow {
   for (const item of items) {
-    const entry = evalItem(item, scope);
-    if (entry) entries.push(entry);
+    const flow = evalItem(item, ctx);
+    if (flow.kind === "return") return flow;
   }
-  return entries;
+  return NORMAL;
 }
 
-function evalItem(item: Item, scope: Scope): Entry | null {
-  if (item.type === "vardef") {
-    scope.set(item.name, evalExpr(item.value, scope));
-    return null;
-  }
-  if (item.type === "leaf") {
-    return { kind: "leaf", key: item.key, value: evalExpr(item.value, scope) };
-  }
-  const header = item.header === null ? null : item.header.text;
-  return { kind: "node", name: item.name, header, children: evalItems(item.body, scope) };
+/** Runs `body` with a fresh, popped-after block scope (node bodies, if/while bodies) -- so a `local` declared inside doesn't leak to siblings evaluated afterward. */
+function evalBlockScoped(body: Item[], ctx: EvalCtx): Flow {
+  ctx.locals.push(new Map());
+  const flow = evalItems(body, ctx);
+  ctx.locals.pop();
+  return flow;
 }
 
-function evalExpr(expr: Expr, scope: Scope): Value {
+function currentFrame(ctx: EvalCtx): Frame {
+  return ctx.locals[ctx.locals.length - 1]!;
+}
+
+function resolveLocal(ctx: EvalCtx, name: string): Value | undefined {
+  for (let idx = ctx.locals.length - 1; idx >= 0; idx--) {
+    const binding = ctx.locals[idx]!.get(name);
+    if (binding) return binding.value;
+  }
+  return undefined;
+}
+
+/** §1's leaf-reassignment rule: only a `local` binding is updated in place; a param/loop-var binding of the same name is NOT reassigned (the leaf still emits). Stops at the first (innermost) match either way -- lexical shadowing. */
+function setLocalIfExists(ctx: EvalCtx, name: string, value: Value): boolean {
+  for (let idx = ctx.locals.length - 1; idx >= 0; idx--) {
+    const binding = ctx.locals[idx]!.get(name);
+    if (binding) {
+      if (!binding.reassignable) return false;
+      binding.value = value;
+      return true;
+    }
+  }
+  return false;
+}
+
+function evalItem(item: Item, ctx: EvalCtx): Flow {
+  switch (item.type) {
+    case "vardef":
+      ctx.atVars.set(item.name, evalExpr(item.value, ctx));
+      return NORMAL;
+    case "local":
+      currentFrame(ctx).set(item.name, { value: evalExpr(item.value, ctx), reassignable: true });
+      return NORMAL;
+    case "leaf": {
+      const value = evalExpr(item.value, ctx);
+      if (!setLocalIfExists(ctx, item.key, value)) {
+        ctx.sink.push({ kind: "leaf", key: item.key, value });
+      }
+      return NORMAL;
+    }
+    case "node": {
+      const header = item.header === null ? null : item.header.text;
+      const children: Entry[] = [];
+      evalBlockScoped(item.body, { ...ctx, sink: children }); // a stray `return` inside a node body is discarded -- not validated yet, no fixture exercises it
+      ctx.sink.push({ kind: "node", name: item.name, header, children });
+      return NORMAL;
+    }
+    case "fndef":
+      ctx.functions.set(item.name, item);
+      return NORMAL;
+    case "exprstmt":
+      evalExpr(item.expr, ctx); // side effect only: any entries the callee's body produces land in ctx.sink
+      return NORMAL;
+    case "if": {
+      for (const branch of [{ cond: item.cond, body: item.thenBody }, ...item.elifs]) {
+        if (isTruthy(evalExpr(branch.cond, ctx))) return evalBlockScoped(branch.body, ctx);
+      }
+      if (item.elseBody) return evalBlockScoped(item.elseBody, ctx);
+      return NORMAL;
+    }
+    case "for": {
+      const startN = requireNumber(evalExpr(item.start, ctx));
+      const stopN = requireNumber(evalExpr(item.stop, ctx));
+      const stepN = item.step ? requireNumber(evalExpr(item.step, ctx)) : 1;
+      if (stepN === 0) throw new EvalError("scorium::eval::type_error: a `for` step of 0 is invalid");
+      for (let i = startN; stepN > 0 ? i <= stopN : i >= stopN; i += stepN) {
+        const loopVal: Value = Number.isInteger(i) ? makeInt(BigInt(i)) : { kind: "float", value: i };
+        ctx.locals.push(new Map([[item.varName, { value: loopVal, reassignable: false }]]));
+        const flow = evalItems(item.body, ctx);
+        ctx.locals.pop();
+        if (flow.kind === "return") return flow;
+      }
+      return NORMAL;
+    }
+    case "while": {
+      while (isTruthy(evalExpr(item.cond, ctx))) {
+        const flow = evalBlockScoped(item.body, ctx);
+        if (flow.kind === "return") return flow;
+      }
+      return NORMAL;
+    }
+    case "return":
+      return { kind: "return", value: item.value ? evalExpr(item.value, ctx) : NIL };
+  }
+}
+
+function requireNumber(v: Value): number {
+  if (v.kind === "int") return Number(v.value);
+  if (v.kind === "float") return v.value;
+  throw new EvalError(`scorium::eval::type_error: expected a number, found ${v.kind}`);
+}
+
+function evalExpr(expr: Expr, ctx: EvalCtx): Value {
   switch (expr.type) {
     case "int":
       return makeInt(expr.value);
@@ -52,10 +164,10 @@ function evalExpr(expr: Expr, scope: Scope): Value {
     case "bool":
       return { kind: "bool", value: expr.value };
     case "nil":
-      return { kind: "nil" };
+      return NIL;
     case "str":
       if (expr.lit.kind === "quoted") return { kind: "string", value: expr.lit.text };
-      return { kind: "string", value: evalBareParts(expr.lit.parts, scope) };
+      return { kind: "string", value: evalBareParts(expr.lit.parts, ctx) };
     case "color":
       return parseColor(expr.hex);
     case "duration":
@@ -64,29 +176,47 @@ function evalExpr(expr: Expr, scope: Scope): Value {
       }
       return { kind: "duration", amount: expr.amount, unit: expr.unit };
     case "list":
-      return { kind: "list", value: expr.items.map((e) => evalExpr(e, scope)) };
+      return { kind: "list", value: expr.items.map((e) => evalExpr(e, ctx)) };
     case "ident": {
-      // §1 resolution: step 2 (`@`-variable), then step 5 (fallback to
-      // a literal string). Steps 1/3/4 are not implemented.
-      const bound = scope.get(expr.name);
-      if (bound !== undefined) return bound;
+      // §1 resolution: step 1 (local/param/loop-var), step 2 (@-variable),
+      // step 5 (fallback to a literal string). Steps 3/4 (sibling leaf,
+      // host value) are not implemented.
+      const local = resolveLocal(ctx, expr.name);
+      if (local !== undefined) return local;
+      const at = ctx.atVars.get(expr.name);
+      if (at !== undefined) return at;
       return { kind: "string", value: expr.name };
     }
     case "unary":
-      return evalUnary(expr.op, evalExpr(expr.operand, scope));
+      return evalUnary(expr.op, evalExpr(expr.operand, ctx));
     case "binary":
-      return evalBinary(expr.op, expr, scope);
+      return evalBinary(expr.op, expr.left, expr.right, ctx);
+    case "call":
+      return evalCall(expr.name, expr.args, ctx);
   }
 }
 
-function evalBareParts(parts: Array<{ kind: "lit"; text: string } | { kind: "interp"; name: string }>, scope: Scope): string {
+function evalCall(name: string, argExprs: Expr[], ctx: EvalCtx): Value {
+  const fn = ctx.functions.get(name);
+  if (!fn) throw new EvalError(`scorium::eval::unknown_function: unknown function \`${name}\``);
+  const argValues = argExprs.map((a) => evalExpr(a, ctx));
+  const frame: Frame = new Map();
+  fn.params.forEach((p, i) => frame.set(p, { value: argValues[i] ?? NIL, reassignable: false }));
+  ctx.locals.push(frame);
+  const flow = evalItems(fn.body, ctx); // entries the body produces land in the caller's current ctx.sink, same as a for/while body would
+  ctx.locals.pop();
+  return flow.kind === "return" ? flow.value : NIL;
+}
+
+function evalBareParts(parts: Array<{ kind: "lit"; text: string } | { kind: "interp"; name: string }>, ctx: EvalCtx): string {
   let out = "";
   for (const part of parts) {
     if (part.kind === "lit") {
       out += part.text;
       continue;
     }
-    const bound = scope.get(part.name);
+    const local = resolveLocal(ctx, part.name);
+    const bound = local !== undefined ? local : ctx.atVars.get(part.name);
     if (bound === undefined) {
       throw new EvalError(`scorium::eval::undefined_interpolation: \`$${part.name}\` is not defined; define it first with \`@${part.name} = value\``);
     }
@@ -132,25 +262,24 @@ function isTruthy(v: Value): boolean {
   return !(v.kind === "nil" || (v.kind === "bool" && v.value === false));
 }
 
-function evalUnary(op: "neg" | "not", v: Value): Value {
+function evalUnary(op: UnOp, v: Value): Value {
   if (op === "not") return { kind: "bool", value: !isTruthy(v) };
-  // neg
   if (v.kind === "int") return makeInt(-v.value);
   if (v.kind === "float") return { kind: "float", value: -v.value };
   throw new EvalError(`scorium::eval::type_error: cannot negate a ${v.kind}`);
 }
 
-function evalBinary(op: import("./ast.ts").BinOp, expr: Extract<Expr, { type: "binary" }>, scope: Scope): Value {
+function evalBinary(op: BinOp, leftExpr: Expr, rightExpr: Expr, ctx: EvalCtx): Value {
   if (op === "and") {
-    const l = evalExpr(expr.left, scope);
-    return isTruthy(l) ? evalExpr(expr.right, scope) : l;
+    const l = evalExpr(leftExpr, ctx);
+    return isTruthy(l) ? evalExpr(rightExpr, ctx) : l;
   }
   if (op === "or") {
-    const l = evalExpr(expr.left, scope);
-    return isTruthy(l) ? l : evalExpr(expr.right, scope);
+    const l = evalExpr(leftExpr, ctx);
+    return isTruthy(l) ? l : evalExpr(rightExpr, ctx);
   }
-  const l = evalExpr(expr.left, scope);
-  const r = evalExpr(expr.right, scope);
+  const l = evalExpr(leftExpr, ctx);
+  const r = evalExpr(rightExpr, ctx);
   if (op === "eq" || op === "noteq") {
     const eq = valuesEqual(l, r);
     return { kind: "bool", value: op === "eq" ? eq : !eq };
@@ -209,7 +338,7 @@ function compare(op: "lt" | "gt" | "lte" | "gte", l: Value, r: Value): boolean {
   return o >= 0;
 }
 
-/** Fixture/runtime equality per scorium-spec §2: exact for Int/Float pairs, false for other mismatched-type pairs (not an error). */
+/** Runtime equality per scorium-spec §2: exact for Int/Float pairs, false for other mismatched-type pairs (not an error), NaN unequal to itself. */
 function valuesEqual(l: Value, r: Value): boolean {
   if (l.kind === "int" && r.kind === "float") return compareIntFloat(l.value, r.value) === 0;
   if (l.kind === "float" && r.kind === "int") return compareIntFloat(r.value, l.value) === 0;
@@ -217,10 +346,8 @@ function valuesEqual(l: Value, r: Value): boolean {
   switch (l.kind) {
     case "int":
       return l.value === (r as typeof l).value;
-    case "float": {
-      const rv = (r as typeof l).value;
-      return l.value === rv; // NaN !== NaN here, matching section 2's runtime `==` (not fixture-assertion equality)
-    }
+    case "float":
+      return l.value === (r as typeof l).value;
     case "bool":
       return l.value === (r as typeof l).value;
     case "nil":
