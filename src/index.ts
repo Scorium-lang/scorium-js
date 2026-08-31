@@ -1,6 +1,6 @@
 export { parse, ParseError } from "./parser.ts";
 export { evaluate, EvalError } from "./eval.ts";
-export type { EvalOptions, IncludePolicy, SandboxOptions, HostFunction } from "./eval.ts";
+export type { EvalOptions, IncludePolicy, IncludeResolver, ResolvedInclude, SandboxOptions, HostFunction } from "./eval.ts";
 export { format } from "./format.ts";
 export type { FormatOptions } from "./format.ts";
 export { ScoriumError, LexError } from "./errors.ts";

@@ -60,3 +60,51 @@ announce()`),
   assert.equal(entries.length, 1);
   assert.equal(entries[0]?.kind, "leaf");
 });
+
+test("a custom includeResolver reads from a non-filesystem source", () => {
+  const docs: Record<string, string> = { child: "value = 1\n" };
+  const entries = evaluate(parse('include "child"\n'), {
+    includeResolver: {
+      resolve: (_base, path) => {
+        if (!(path in docs)) throw new Error(`no such virtual document \`${path}\``);
+        return { key: path, base: path };
+      },
+      load: (key) => docs[key]!,
+    },
+  });
+
+  assert.equal(entries.length, 2);
+  const value = entries[1];
+  assert.equal(value?.kind, "leaf");
+  if (value?.kind !== "leaf") throw new Error("expected value leaf");
+  assert.deepEqual(value.value, { kind: "int", value: 1n });
+});
+
+test("includeResolver denial is scorium::eval::include_path_denied", () => {
+  assert.throws(
+    () =>
+      evaluate(parse('include "missing"\n'), {
+        includeResolver: {
+          resolve: () => {
+            throw new Error("denied");
+          },
+          load: () => "",
+        },
+      }),
+    (error) => error instanceof EvalError && error.code === "scorium::eval::include_path_denied",
+  );
+});
+
+test("includeResolver cycle is scorium::eval::include_cycle", () => {
+  const docs: Record<string, string> = { a: 'include "a"\n' };
+  assert.throws(
+    () =>
+      evaluate(parse('include "a"\n'), {
+        includeResolver: {
+          resolve: (_base, path) => ({ key: path, base: path }),
+          load: (key) => docs[key]!,
+        },
+      }),
+    (error) => error instanceof EvalError && error.code === "scorium::eval::include_cycle",
+  );
+});

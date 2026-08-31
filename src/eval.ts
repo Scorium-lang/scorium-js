@@ -16,6 +16,39 @@ export interface IncludePolicy {
 }
 
 /**
+ * The result of resolving one `include "path"` against a base: a
+ * canonical `key` identifying the target (used for cycle detection and
+ * as the `include` entry's resolved path) and the `base` that nested
+ * includes found inside it should resolve against next. For the
+ * built-in filesystem resolution these are the resolved file's path and
+ * its containing directory, respectively -- a custom resolver is free
+ * to give both any meaning suited to its own address space.
+ */
+export interface ResolvedInclude {
+  key: string;
+  base: string;
+}
+
+/**
+ * A host-supplied alternative to filesystem-backed `include "..."`
+ * resolution, for content that isn't (only) on local disk -- content
+ * addressed by URL, stored in a database, or held as unsaved editor
+ * buffers. Overrides `IncludePolicy`'s containment/traversal checks
+ * entirely: a custom resolver owns its own path-safety policy. Throw to
+ * signal failure: `resolve` throwing raises
+ * `scorium::eval::include_path_denied`, `load` throwing raises
+ * `scorium::eval::include_io`.
+ *
+ * When `EvalOptions.includeResolver` is unset (the default), `include`
+ * resolves against the local filesystem exactly as it always has,
+ * honoring `IncludePolicy`.
+ */
+export interface IncludeResolver {
+  resolve(base: string, path: string): ResolvedInclude;
+  load(key: string): string;
+}
+
+/**
  * Required-but-defaults-open resource limits (scorium-spec §3/§6):
  * existence, configurability, and the error path are normative; these
  * default values are scorium-rust's own, not independently justified.
@@ -43,6 +76,8 @@ export interface EvalOptions {
   /** Directory relative `include "..."` paths resolve from. Defaults to the current working directory, matching a source with no file of its own. */
   baseDir?: string;
   includePolicy?: Partial<IncludePolicy>;
+  /** Overrides filesystem-backed `include` resolution when set. See `IncludeResolver`. */
+  includeResolver?: IncludeResolver;
   sandbox?: Partial<SandboxOptions>;
   /** Reachable via `f(args)` calls -- identifier-resolution step 4 is host *values*, not functions; see `hostValues`. */
   hostFunctions?: Record<string, HostFunction>;
@@ -84,6 +119,7 @@ interface EvalCtx {
   /** Where relative `include` paths resolve from -- changes to the included file's own directory inside its evaluation (scorium-rust does the same). */
   baseDir: string;
   includePolicy: IncludePolicy;
+  includeResolver?: IncludeResolver;
   /** Canonical paths of includes currently in progress, for cycle detection (scorium-spec §3). */
   includeStack: string[];
   maxLoopIterations: number;
@@ -117,6 +153,7 @@ export function evaluate(doc: Document, options: EvalOptions = {}): Entry[] {
     sink: [],
     baseDir: options.baseDir ?? process.cwd(),
     includePolicy: { enabled: true, allowParentTraversal: false, ...options.includePolicy },
+    includeResolver: options.includeResolver,
     includeStack: [],
     maxLoopIterations: sandbox.maxLoopIterations,
     maxFunctionCallDepth: sandbox.maxFunctionCallDepth,
@@ -338,7 +375,46 @@ function checkIncludePath(pathStr: string, ctx: EvalCtx): string {
   return resolved;
 }
 
+function execIncludeViaResolver(resolver: IncludeResolver, pathStr: string, ctx: EvalCtx, span?: SourceSpan): Flow {
+  if (!ctx.includePolicy.enabled) {
+    throw new EvalError("scorium::eval::includes_disabled: `include` is disabled by the host application");
+  }
+  let resolved: ResolvedInclude;
+  try {
+    resolved = resolver.resolve(ctx.baseDir, pathStr);
+  } catch {
+    throw new EvalError(`scorium::eval::include_path_denied: include path \`${pathStr}\` was denied by the host resolver`);
+  }
+  if (ctx.includeStack.includes(resolved.key)) {
+    const chain = [...ctx.includeStack, resolved.key].join(" -> ");
+    throw new EvalError(`scorium::eval::include_cycle: include cycle detected: ${chain}`);
+  }
+  let content: string;
+  try {
+    content = resolver.load(resolved.key);
+  } catch (err) {
+    throw new EvalError(`scorium::eval::include_io: failed to read include \`${pathStr}\`: ${(err as Error).message}`);
+  }
+  let includedDoc: Document;
+  try {
+    includedDoc = parse(content, { sourceName: resolved.key });
+  } catch (err) {
+    throw new EvalError(`scorium::eval::include_parse: include \`${pathStr}\` failed to parse: ${(err as Error).message}`);
+  }
+  ctx.sink.push({ kind: "include", path: pathStr, span });
+  const childCtx: EvalCtx = {
+    ...ctx,
+    source: includedDoc.source ?? { name: resolved.key, text: content },
+    baseDir: resolved.base,
+    includeStack: [...ctx.includeStack, resolved.key],
+  };
+  return evalItems(includedDoc.items, childCtx);
+}
+
 function execInclude(pathStr: string, ctx: EvalCtx, span?: SourceSpan): Flow {
+  if (ctx.includeResolver) {
+    return execIncludeViaResolver(ctx.includeResolver, pathStr, ctx, span);
+  }
   const resolved = checkIncludePath(pathStr, ctx);
   let canonical: string;
   try {

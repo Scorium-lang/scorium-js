@@ -19,6 +19,10 @@ versions.
   Lua-required case is capability-skipped.
 - `docs/API_STABILITY.md`, documenting stability tiers, the deprecation
   policy, and upgrade guidance ahead of `1.0`.
+- `includeResolver`, letting a host override `include "..."` resolution
+  for content that isn't (only) on local disk. `includePolicy`'s
+  containment checks still apply when no resolver is set (the default,
+  unchanged behavior).
 
 ### Fixed
 

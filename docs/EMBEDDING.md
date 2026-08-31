@@ -250,6 +250,34 @@ Evaluation and includes currently use Node's synchronous filesystem APIs,
 so evaluate on a worker or during configuration loading rather than in a
 latency-sensitive request handler.
 
+### Non-filesystem includes
+
+A host whose content isn't (only) on local disk -- addressed by URL, held
+in a database, or open as unsaved editor buffers -- can override `include`
+resolution entirely with `includeResolver`, bypassing `includePolicy`
+(a resolver owns its own path-safety policy) and Node's `fs` module:
+
+```ts
+const entries = evaluate(document, {
+  includeResolver: {
+    // Combine `base` and `path` however your address space works.
+    // `key` identifies the target for cycle detection; `base` is what
+    // nested includes inside it will resolve against next. Throw to
+    // deny (scorium::eval::include_path_denied).
+    resolve(base, path) {
+      return { key: /* ... */ path, base: /* ... */ path };
+    },
+    // Fetch content for a key returned by resolve(). Throw to signal
+    // failure (scorium::eval::include_io).
+    load(key) {
+      return myDocumentStore.get(key);
+    },
+  },
+});
+```
+
+`includePolicy.enabled` still gates `include` on or off either way.
+
 ## 6. Resource limits
 
 ```ts
@@ -304,7 +332,7 @@ schema" above.
 | `SCORIUM_LANGUAGE_VERSION` | Implemented language revision |
 | `Document`, `Item`, `Expr` and related types | AST inspection |
 | `Entry`, `Value` | Evaluation output |
-| `EvalOptions`, `IncludePolicy`, `SandboxOptions` | Host policy |
+| `EvalOptions`, `IncludePolicy`, `IncludeResolver`, `SandboxOptions` | Host policy |
 | `HostFunction` | Host call contract |
 | `Schema`, `NodeSchema`, `SchemaError`, `customType`, `listOf` | Schema validation |
 | `FormatOptions` | Formatter indentation |
