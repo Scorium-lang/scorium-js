@@ -17,6 +17,8 @@ versions.
   file-relative includes.
 - The expanded Scorium `0.2.1` fixture corpus: 55 applicable cases pass and the
   Lua-required case is capability-skipped.
+- `docs/API_STABILITY.md`, documenting stability tiers, the deprecation
+  policy, and upgrade guidance ahead of `1.0`.
 
 ### Fixed
 

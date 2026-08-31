@@ -192,6 +192,7 @@ shipped and when.
 - [Embedding](./docs/EMBEDDING.md) -- the TypeScript API for hosts.
 - [Diagnostics](./docs/DIAGNOSTICS.md) -- the diagnostic catalogue.
 - [Security model](./docs/SECURITY.md) -- evaluator and host responsibility.
+- [API stability](./docs/API_STABILITY.md) -- what's safe to depend on pre-1.0.
 - [Roadmap](./docs/ROADMAP.md) -- what exists and what is deferred.
 
 ## Security
