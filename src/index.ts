@@ -30,3 +30,4 @@ export type {
   ValueType,
 } from "./schema.ts";
 export { SCORIUM_LANGUAGE_VERSION } from "./version.ts";
+export { portableAst } from "./portable.ts";

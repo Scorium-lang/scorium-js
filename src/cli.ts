@@ -22,7 +22,9 @@ import { evaluate } from "./eval.ts";
 import { ScoriumError } from "./errors.ts";
 import { format } from "./format.ts";
 import { parse } from "./parser.ts";
+import { portableAst } from "./portable.ts";
 import { colorToHex8, durationToString, type Value } from "./value.ts";
+import { SCORIUM_LANGUAGE_VERSION } from "./version.ts";
 import type { Entry } from "./entry.ts";
 
 function readSource(path: string): string | null {
@@ -44,26 +46,119 @@ function reportError(error: unknown, path: string): void {
   console.error(`error: ${path}: ${message}`);
 }
 
-function runCheck(path: string): number {
-  const text = readSource(path);
-  if (text === null) return 1;
+interface CheckPosition {
+  line: number;
+  character: number;
+}
+
+interface CheckDiagnostic {
+  code: string;
+  stage: string;
+  severity: "error" | "warning";
+  message: string;
+  source: string;
+  range: { start: CheckPosition; end: CheckPosition };
+  related: unknown[];
+}
+
+function checkResult(path: string, ok: boolean, diagnostics: CheckDiagnostic[], entries?: number): void {
+  const result: Record<string, unknown> = {
+    ok,
+    language_version: SCORIUM_LANGUAGE_VERSION,
+    source: path,
+    diagnostics,
+  };
+  if (entries !== undefined) result.entries = entries;
+  console.log(JSON.stringify(result, null, 2));
+}
+
+function utf16Position(text: string, offset: number): CheckPosition {
+  const prefix = text.slice(0, Math.max(0, Math.min(offset, text.length))).replaceAll("\r\n", "\n");
+  const line = (prefix.match(/\n/g) ?? []).length;
+  const lineStart = prefix.lastIndexOf("\n") + 1;
+  return { line, character: prefix.length - lineStart };
+}
+
+function diagnosticStage(code: string): string {
+  return code.split("::")[1] ?? "cli";
+}
+
+function errorDiagnostic(error: unknown, text: string, path: string): CheckDiagnostic {
+  if (error instanceof ScoriumError) {
+    const start = error.span?.start ?? 0;
+    const end = error.span?.end ?? start;
+    const message = error.code ? error.message.replace(new RegExp(`^${error.code}:\\s*`), "") : error.message;
+    return {
+      code: error.code || "scorium::cli::runtime",
+      stage: diagnosticStage(error.code),
+      severity: "error",
+      message,
+      source: error.sourceName ?? path,
+      range: error.location && error.endLocation
+        ? {
+            start: { line: error.location.line - 1, character: error.location.column - 1 },
+            end: { line: error.endLocation.line - 1, character: error.endLocation.column - 1 },
+          }
+        : { start: utf16Position(text, start), end: utf16Position(text, end) },
+      related: [],
+    };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    code: "scorium::cli::runtime",
+    stage: "cli",
+    severity: "error",
+    message,
+    source: path,
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    related: [],
+  };
+}
+
+function runCheck(path: string, json: boolean): number {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (json) {
+      checkResult(path, false, [{
+        code: "scorium::cli::io",
+        stage: "cli",
+        severity: "error",
+        message,
+        source: path,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+        related: [],
+      }]);
+    } else {
+      console.error(`error: cannot read ${path}: ${message}`);
+    }
+    return 1;
+  }
   try {
     const doc = parse(text, { sourceName: path });
     const entries = evaluate(doc, { baseDir: dirname(path) });
+    if (json) {
+      checkResult(path, true, [], entries.length);
+      return 0;
+    }
     console.log(`${path}: ok (${entries.length} entries, generic runtime -- no schema or host functions attached)`);
     return 0;
   } catch (error) {
-    reportError(error, path);
+    if (json) checkResult(path, false, [errorDiagnostic(error, text, path)]);
+    else reportError(error, path);
     return 1;
   }
 }
 
-function runParse(path: string): number {
+function runParse(path: string, json: boolean): number {
   const text = readSource(path);
   if (text === null) return 1;
   try {
     const doc = parse(text, { sourceName: path });
-    console.log(JSON.stringify(doc, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
+    const output = json ? portableAst(doc) : doc;
+    console.log(JSON.stringify(output, (_key, value) => (typeof value === "bigint" ? value.toString() : value), 2));
     return 0;
   } catch (error) {
     reportError(error, path);
@@ -251,7 +346,9 @@ function usage(): string {
     "",
     "Usage:",
     "  scorium check <file>          parse + evaluate; report diagnostics",
+    "  scorium check <file> --json   report a stable machine-readable result",
     "  scorium parse <file>          print the parsed syntax tree",
+    "  scorium parse <file> --json   print the portable syntax tree contract",
     "  scorium fmt <file>            format a file in place",
     "  scorium fmt --check <file>    exit non-zero if a file isn't formatted",
     "  scorium eval <file>           print the evaluated configuration tree",
@@ -280,7 +377,7 @@ function main(argv: string[]): number {
   const [command, ...rest] = argv;
   if (!command || command === "--help" || command === "-h") {
     console.log(usage());
-    return command ? 0 : 1;
+    return command ? 0 : 2;
   }
   if (command === "--version") {
     console.log(packageVersion());
@@ -290,17 +387,21 @@ function main(argv: string[]): number {
   const positionals = rest.filter((arg) => arg !== "--check" && arg !== "--json");
   const check = rest.includes("--check");
   const json = rest.includes("--json");
-  const path = positionals[0];
-  if (!path) {
-    console.error(`error: ${command} requires a <file> argument`);
-    return 1;
+  const path = positionals[0]!;
+  if (
+    positionals.length !== 1 ||
+    (check && command !== "fmt") ||
+    (json && command !== "check" && command !== "parse" && command !== "eval")
+  ) {
+    console.error(`error: invalid usage for ${command}; expected exactly one <file> and only supported options`);
+    return 2;
   }
 
   switch (command) {
     case "check":
-      return runCheck(path);
+      return runCheck(path, json);
     case "parse":
-      return runParse(path);
+      return runParse(path, json);
     case "fmt":
       return runFmt(path, check);
     case "eval":
@@ -308,7 +409,7 @@ function main(argv: string[]): number {
     default:
       console.error(`error: unknown command \`${command}\`\n`);
       console.error(usage());
-      return 1;
+      return 2;
   }
 }
 

@@ -43,6 +43,39 @@ test("`scorium check` reports a diagnostic and exits non-zero", () => {
   }
 });
 
+test("`scorium check --json` reports the shared machine contract with UTF-16 ranges", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const valid = join(dir, "valid.scor");
+  const invalid = join(dir, "invalid.scor");
+  writeFileSync(valid, "port = 8080\n");
+  writeFileSync(invalid, 'bad = "😀" ?\n');
+  try {
+    const success = run(["check", valid, "--json"]);
+    assert.equal(success.status, 0);
+    assert.deepEqual(JSON.parse(success.stdout), {
+      ok: true,
+      language_version: "0.2.1",
+      source: valid,
+      diagnostics: [],
+      entries: 1,
+    });
+
+    const failure = run(["check", invalid, "--json"]);
+    assert.equal(failure.status, 1);
+    assert.equal(failure.stderr, "");
+    const result = JSON.parse(failure.stdout) as {
+      ok: boolean;
+      diagnostics: Array<{ code: string; stage: string; range: { start: { line: number; character: number } } }>;
+    };
+    assert.equal(result.ok, false);
+    assert.equal(result.diagnostics[0]?.code, "scorium::lex::unexpected_char");
+    assert.equal(result.diagnostics[0]?.stage, "lex");
+    assert.deepEqual(result.diagnostics[0]?.range.start, { line: 0, character: 11 });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("`scorium fmt --check` fails on unformatted input, `scorium fmt` fixes it", () => {
   const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
   const file = join(dir, "unformatted.scor");
@@ -91,6 +124,22 @@ test("`scorium eval --json` prints tagged-value JSON matching the conformance en
   }
 });
 
+test("`scorium parse --json` prints the portable syntax tree", () => {
+  const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
+  const file = join(dir, "parse.scor");
+  writeFileSync(file, 'server "primary" {\n port = 8000 + 80\n}\n');
+  try {
+    const result = run(["parse", file, "--json"]);
+    assert.equal(result.status, 0);
+    const tree = JSON.parse(result.stdout) as { type: string; language_version: string; items: unknown[] };
+    assert.equal(tree.type, "document");
+    assert.equal(tree.language_version, "0.2.1");
+    assert.equal(tree.items.length, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("`scorium fmt --check` prints a line diff of what would change", () => {
   const dir = mkdtempSync(join(tmpdir(), "scorium-cli-"));
   const file = join(dir, "unformatted.scor");
@@ -107,14 +156,20 @@ test("`scorium fmt --check` prints a line diff of what would change", () => {
 
 test("an unknown command exits non-zero with usage on stderr", () => {
   const result = run(["frobnicate", "x.scor"]);
-  assert.equal(result.status, 1);
+  assert.equal(result.status, 2);
   assert.match(result.stderr, /unknown command/);
 });
 
 test("no arguments prints usage and exits non-zero", () => {
   const result = run([]);
-  assert.equal(result.status, 1);
+  assert.equal(result.status, 2);
   assert.match(result.stdout, /Usage:/);
+});
+
+test("unsupported options are usage errors", () => {
+  const result = run(["check", "config.scor", "--wat"]);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /invalid usage/);
 });
 
 test("`scorium --version` reports the real package version, not \"unknown\"", () => {
