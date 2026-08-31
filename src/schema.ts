@@ -358,7 +358,8 @@ function addMissingRequired(
   errors: SchemaError[],
   options: ValidateOptions,
 ): void {
-  for (const [key, keySchema] of keys) {
+  for (const key of [...keys.keys()].sort()) {
+    const keySchema = keys.get(key)!;
     if (keySchema.required && !seen.has(key)) {
       errors.push(
         schemaError(

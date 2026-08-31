@@ -1,0 +1,14 @@
+{
+  "name": "schema rejects duplicate keys by default",
+  "source": "server {\n    port = 8080\n    port = 9090\n}\n",
+  "schema": {
+    "nodes": {
+      "server": {
+        "keys": { "port": { "type": "integer", "required": false } }
+      }
+    }
+  },
+  "expect_errors": [
+    { "code": "scorium::schema::duplicate_key", "key": "port" }
+  ]
+}

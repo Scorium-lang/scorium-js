@@ -1,0 +1,14 @@
+{
+  "name": "schema rejects the wrong built-in value type",
+  "source": "server {\n    port = nope\n}\n",
+  "schema": {
+    "nodes": {
+      "server": {
+        "keys": { "port": { "type": "integer", "required": false } }
+      }
+    }
+  },
+  "expect_errors": [
+    { "code": "scorium::schema::wrong_type", "key": "port" }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "name": "division by zero is explicit",
+  "source": "result = 1 / 0\n",
+  "expect_error": { "code": "scorium::eval::division_by_zero" }
+}

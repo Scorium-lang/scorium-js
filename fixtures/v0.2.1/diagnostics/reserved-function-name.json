@@ -1,0 +1,5 @@
+{
+  "name": "reserved word is rejected as a function name",
+  "source": "fn if() {\n}\n",
+  "expect_error": { "code": "scorium::parse::reserved_word" }
+}

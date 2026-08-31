@@ -1,0 +1,5 @@
+{
+  "name": "dollar interpolation marker is rejected in expressions",
+  "source": "result = 1 + $value\n",
+  "expect_error": { "code": "scorium::parse::dollar_in_expression" }
+}

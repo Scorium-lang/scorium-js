@@ -1,0 +1,14 @@
+{
+  "name": "schema suggests a nearby key",
+  "source": "server {\n    prit = 8080\n}\n",
+  "schema": {
+    "nodes": {
+      "server": {
+        "keys": { "port": { "type": "integer", "required": false } }
+      }
+    }
+  },
+  "expect_errors": [
+    { "code": "scorium::schema::unknown_key", "node": "server", "key": "prit", "suggestion": "port" }
+  ]
+}

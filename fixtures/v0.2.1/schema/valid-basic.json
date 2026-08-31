@@ -1,0 +1,16 @@
+{
+  "name": "schema accepts a matching document",
+  "source": "server primary {\n    host = localhost\n    port = 8080\n}\n",
+  "schema": {
+    "nodes": {
+      "server": {
+        "keys": {
+          "host": { "type": "string", "required": true },
+          "port": { "type": "integer", "required": true }
+        },
+        "allowed_headers": ["primary"]
+      }
+    }
+  },
+  "expect_valid": true
+}

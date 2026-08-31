@@ -16,7 +16,7 @@ export type Entry =
    * A standalone call to a *host*-registered function (not a Scorium
    * `fn`), used as a full statement rather than part of an assignment --
    * matches scorium-rust's `Entry::HostCall`. Host-integration entries
-   * are outside the `0.2.0` conformance corpus's scope (see
+   * are outside the `0.2.1` conformance corpus's scope (see
    * scorium-spec's `conformance/README.md`), so this is an implementation
    * capability, not conformance-mandated behavior.
    */

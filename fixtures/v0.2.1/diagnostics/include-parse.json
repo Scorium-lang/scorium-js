@@ -1,0 +1,9 @@
+{
+  "name": "invalid included source reports include parse",
+  "files": {
+    "main.scor": "include \"broken.scor\"\n",
+    "broken.scor": "value = [\n"
+  },
+  "entry": "main.scor",
+  "expect_error": { "code": "scorium::eval::include_parse" }
+}

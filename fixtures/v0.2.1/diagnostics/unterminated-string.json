@@ -1,0 +1,5 @@
+{
+  "name": "unterminated quoted string is explicit",
+  "source": "value = \"never closed\n",
+  "expect_error": { "code": "scorium::lex::unterminated_string" }
+}

@@ -1,23 +1,17 @@
 # Vendored conformance fixtures
 
-`v0.2.0/` is a **vendored copy** of `scorium-spec/conformance/v0.2.0/`,
-not a live reference -- `scorium-spec` has no GitHub repo of its own yet,
-so CI here can't check it out as a dependency. Vendoring keeps this repo
-self-contained and its CI runnable from a fresh clone.
-
-Vendored from `scorium-spec` commit `4605e075d4c5cfd2ebfe5577004428467ad6a37f`
-(2026-08-30). When `scorium-spec` gets a real repo and a release process,
-this should become a real dependency (git submodule, fetched artifact,
-or published package) instead of a manual copy.
+`v0.2.1/` is a **vendored copy** of `scorium-spec/conformance/v0.2.1/`,
+not a live reference. Vendoring keeps this repo self-contained and its CI
+runnable from a fresh clone. The directory currently contains all 56 fixtures;
+the Lua-required case is capability-skipped by this implementation.
 
 ## Keeping this in sync
 
-There's no automation for this yet -- when `scorium-spec`'s
-`conformance/` changes, re-copy it by hand:
+When `scorium-spec`'s `conformance/` changes, re-copy the matching version:
 
 ```sh
-rm -rf fixtures/v0.2.0
-cp -r ../scorium-spec/conformance/v0.2.0 fixtures/
+rm -rf fixtures/v0.2.1
+cp -r ../scorium-spec/conformance/v0.2.1 fixtures/
 ```
 
 (assumes `scorium-spec` is checked out as a sibling directory, the same
@@ -28,5 +22,5 @@ set `SCORIUM_SPEC_FIXTURES` to point at its live `conformance/<version>/`
 directory instead of using this vendored copy:
 
 ```sh
-SCORIUM_SPEC_FIXTURES=../scorium-spec/conformance/v0.2.0 npm run conformance
+SCORIUM_SPEC_FIXTURES=../scorium-spec/conformance/v0.2.1 npm run conformance
 ```

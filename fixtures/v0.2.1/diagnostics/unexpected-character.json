@@ -1,0 +1,5 @@
+{
+  "name": "invalid string escape reports unexpected character",
+  "source": "value = \"bad\\q\"\n",
+  "expect_error": { "code": "scorium::lex::unexpected_char" }
+}

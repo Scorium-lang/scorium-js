@@ -1,0 +1,8 @@
+{
+  "name": "schema suggests a nearby node",
+  "source": "sevrer {\n}\n",
+  "schema": { "nodes": { "server": {} } },
+  "expect_errors": [
+    { "code": "scorium::schema::unknown_node", "suggestion": "server" }
+  ]
+}

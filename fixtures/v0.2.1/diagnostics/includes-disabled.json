@@ -1,0 +1,6 @@
+{
+  "name": "disabled includes report an explicit error",
+  "source": "include \"other.scor\"\n",
+  "options": { "includes_enabled": false },
+  "expect_error": { "code": "scorium::eval::includes_disabled" }
+}

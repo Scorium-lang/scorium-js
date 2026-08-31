@@ -1,0 +1,5 @@
+{
+  "name": "invalid value token reports unexpected token",
+  "source": "value = ]\n",
+  "expect_error": { "code": "scorium::parse::unexpected_token" }
+}

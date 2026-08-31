@@ -1,0 +1,5 @@
+{
+  "name": "parent include traversal is denied",
+  "source": "include \"../outside.scor\"\n",
+  "expect_error": { "code": "scorium::eval::include_path_denied" }
+}

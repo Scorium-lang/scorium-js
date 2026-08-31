@@ -1,0 +1,5 @@
+{
+  "name": "unterminated node reports unexpected eof",
+  "source": "server {\n",
+  "expect_error": { "code": "scorium::parse::unexpected_eof" }
+}

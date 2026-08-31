@@ -1,0 +1,6 @@
+{
+  "name": "script executes when lua capability is present",
+  "source": "script {\n}\n",
+  "requires": ["lua"],
+  "expect": { "type": "entries", "value": [] }
+}

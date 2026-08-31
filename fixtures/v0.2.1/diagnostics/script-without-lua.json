@@ -1,0 +1,6 @@
+{
+  "name": "script is explicit when lua capability is absent",
+  "source": "script {\n}\n",
+  "excludes": ["lua"],
+  "expect_error": { "code": "scorium::eval::script_error" }
+}

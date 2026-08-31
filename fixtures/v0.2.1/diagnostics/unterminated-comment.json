@@ -1,0 +1,5 @@
+{
+  "name": "unterminated block comment is explicit",
+  "source": "--[[ never closed",
+  "expect_error": { "code": "scorium::lex::unterminated_comment" }
+}

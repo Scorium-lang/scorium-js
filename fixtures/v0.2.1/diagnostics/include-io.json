@@ -1,0 +1,5 @@
+{
+  "name": "missing include reports include io",
+  "source": "include \"missing.scor\"\n",
+  "expect_error": { "code": "scorium::eval::include_io" }
+}

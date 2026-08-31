@@ -1,0 +1,18 @@
+{
+  "name": "schema supports nested lists and explicit unknown policy",
+  "source": "theme {\n    colors = [#112233, #445566]\n    extra = allowed\n    child {\n        enabled = true\n    }\n}\n",
+  "schema": {
+    "nodes": {
+      "theme": {
+        "keys": { "colors": { "type": { "list": "color" }, "required": true } },
+        "allow_unknown_keys": true,
+        "nodes": {
+          "child": {
+            "keys": { "enabled": { "type": "boolean", "required": true } }
+          }
+        }
+      }
+    }
+  },
+  "expect_valid": true
+}
