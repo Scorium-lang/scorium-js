@@ -1,7 +1,7 @@
 # Scorium Grammar
 
 This document summarizes the grammar accepted by `scorium-js` for Scorium
-stable language version `0.2.0`. The normative grammar belongs to the
+stable language version `0.2.1`. The normative grammar belongs to the
 separate `scorium-spec` project. If this guide, the implementation, and the
 spec disagree, the discrepancy must be fixed explicitly; the spec is the
 language authority.
@@ -146,7 +146,7 @@ end or extend the captured block incorrectly. This does not affect ordinary
 Scorium syntax, and script execution remains unavailable, but the parser gap
 must be fixed before claiming complete raw-Lua lexical compatibility.
 
-The following are outside language version `0.2.0`:
+The following are outside language version `0.2.1`:
 
 - host-pluggable lexer syntax;
 - generic `for` over tables or iterators;

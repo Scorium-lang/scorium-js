@@ -9,6 +9,23 @@ versions.
 
 ## [Unreleased]
 
+### Added
+
+- `check --json` diagnostics and a portable `parse --json` syntax tree matching
+  Rust and Go tooling contract v1.
+- `load` and `loadSource` high-level APIs for read/parse/evaluate workflows and
+  file-relative includes.
+- The expanded Scorium `0.2.1` fixture corpus: 55 applicable cases pass and the
+  Lua-required case is capability-skipped.
+
+### Fixed
+
+- Reserved words are rejected consistently in every name position.
+- Schema header validation and deterministic required-key ordering now match
+  Rust and Go.
+- Invalid CLI usage exits with status 2; input, runtime, and I/O failures remain
+  status 1.
+
 ## [0.9.5] - 2026-08-30
 
 ### Fixed

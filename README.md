@@ -103,6 +103,15 @@ evaluate(parse("terminal = pick(kitty, alacritty)"), {
 Sandbox limits and `include` behavior are configurable the same way --
 see the [embedding guide](./docs/EMBEDDING.md) for the complete API.
 
+For the common file-loading path, `load` reads, parses, evaluates, retains the
+source name, and resolves includes relative to the file:
+
+```ts
+import { load } from "scorium";
+
+const { document, entries } = load("config.scor");
+```
+
 Validating an evaluated tree against a host-defined shape, with the same
 `scorium::schema::*` diagnostic codes as `scorium-rs`'s `scorium-schema`:
 
@@ -124,7 +133,9 @@ if (!result.isValid()) {
 
 ```bash
 npx scorium check config.scor         # parse + evaluate; report diagnostics
+npx scorium check config.scor --json  # stable diagnostic envelope
 npx scorium parse config.scor         # print the parsed syntax tree
+npx scorium parse config.scor --json  # portable cross-language syntax tree
 npx scorium fmt config.scor           # format in place
 npx scorium fmt --check config.scor   # exit non-zero + print a diff if unformatted
 npx scorium eval config.scor          # print the evaluated configuration tree
@@ -145,8 +156,8 @@ run it with `node examples/embedding/main.ts`.
 ## Current scope
 
 The entire non-Lua Scorium language core is implemented for stable language
-version **`0.2.0`** and passes **34/34** of `scorium-spec`'s conformance
-fixtures: the declarative
+version **`0.2.1`** and passes all **55 applicable fixtures** in
+`scorium-spec`'s 56-fixture corpus (the Lua-required case is capability-skipped): the declarative
 surface, variables and interpolation, full expressions (exact `Int`/
 `Float` semantics -- `Int` is backed by `bigint`, not `number`, to
 represent the full 64-bit signed range exactly), control flow, functions,
@@ -160,9 +171,9 @@ line/column locations, and a `.format()` excerpt.
 formats correctly; evaluating it raises a clear error rather than
 silently doing nothing. `scorium-js` is deliberately frozen at
 `scorium-spec` §7's "Core" scope (the full language minus `script { }`)
-until there's real evidence Lua is worth the cost; `scorium-go` is the
-project's designated vehicle for gathering that evidence against a real
-consumer. If Lua is ever added here, it should ship as an optional
+until there's real evidence Lua is worth the cost. AquaTTY now provides the
+planned real-host evidence that the non-Lua core is useful on its own, so no
+Lua VM is currently justified. If Lua is ever added here, it should ship as an optional
 capability a consumer opts into, not a dependency this base package
 always carries.
 

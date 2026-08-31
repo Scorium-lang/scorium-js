@@ -7,7 +7,7 @@ loops, and functions when static data is not enough.
 > Simple configuration for beginners. Programmable configuration for
 > advanced users.
 
-This guide describes stable Scorium language version `0.2.0`, which
+This guide describes stable Scorium language version `0.2.1`, which
 `scorium-js` implements natively in TypeScript. The normative definition is
 maintained by the separate `scorium-spec` project; this guide is the
 approachable introduction.

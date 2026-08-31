@@ -1,84 +1,45 @@
 # Roadmap
 
-This document separates what `scorium-js` implements from deferred work so
-planned features are not mistaken for shipped behavior.
+The cross-language roadmap lives in `scorium-spec/ROADMAP.md`. This document
+records the JavaScript/TypeScript implementation's role while keeping its API
+natural for the ecosystem.
 
 ## Status
 
-The native non-Lua language core, canonical formatter, include policy,
-resource limits, and TypeScript embedding API are implemented. The package
-passes all 34 vendored conformance fixtures for stable language version
-`0.2.0`. It is pre-1.0, so its public TypeScript API may change between
-minor versions.
+`scorium-js` implements the non-Lua behavior of language version `0.2.1` and
+passes every applicable fixture: 55 pass and the one Lua-required fixture is
+capability-skipped. `script {}` is parsed and formatted but intentionally
+raises `scorium::eval::script_error` if evaluation reaches it.
 
-## Implemented
+## Delivered roadmap 1-6
 
-### Language
+1. The expanded fixture runner covers diagnostics, includes, schema, and
+   explicit capability requirements.
+2. Parser and schema behavior matches Rust and Go, including reserved words,
+   header validation, and deterministic required-key errors.
+3. `scorium check --json` and `scorium parse --json` implement tooling contract
+   v1 with UTF-16 ranges and the shared portable syntax tree.
+4. `load(path)` and `loadSource(source, options)` provide the common read,
+   parse, evaluate, and file-relative include path.
+5. Editor support comes from the shared `scorium-lsp` executable; duplicating
+   it in Node would add drift without changing `.scor` behavior.
+6. AquaTTY validates that the non-Lua language core is useful in a real host,
+   so adding a JavaScript Lua VM remains unjustified.
 
-- nodes, optional headers, leaves, and nested nodes;
-- integers, floats, booleans, nil, strings, lists, colors, and durations;
-- `@` definitions, `$` interpolation, locals, sibling values, and host values;
-- arithmetic, comparisons, booleans, calls, and color methods;
-- `if`/`elseif`/`else`, numeric `for`, `while`, `return`, and `fn`;
-- includes with path containment and cycle detection;
-- all three comment forms;
-- parsing and byte-preserving formatting of raw `script { }` bodies.
+## Next evidence gates
 
-### Tooling and integration
+- Add a host-provided or asynchronous include resolver when a browser or
+  virtual-filesystem consumer demonstrates the need.
+- Split a browser-only parser/formatter entry point if Node filesystem imports
+  materially block adoption.
+- Add schema-aware editor diagnostics through the shared LSP once host schemas
+  have a portable discovery contract.
 
-- native TypeScript parser, evaluator, and formatter;
-- exported AST, entry, value, option, and error types;
-- catchable `scorium::*` diagnostic codes, each carrying a structured source
-  span and line/column location, plus a rendered excerpt via `.format()`;
-- a schema-validation API (`Schema`/`NodeSchema` builders, `scorium::schema::*`
-  diagnostic codes matching `scorium-rs`'s `scorium-schema` crate);
-- host value and function registration;
-- configurable loop, call-depth, and include policies;
-- canonical, idempotent formatting;
-- versioned cross-implementation conformance fixtures in CI;
-- ESM npm package with declarations and no runtime dependencies;
-- a `scorium` CLI (`check`/`parse`/`fmt`/`fmt --check`/`eval`), matching
-  `scorium-cli`'s subcommands and generic-runtime framing; `fmt --check`
-  prints a line diff and `eval --json` prints tagged-value JSON, both
-  matching `scorium-cli`.
-
-## Deferred
-
-These are directions, not release promises.
-
-### Language-family decisions
-
-- **`script { }` execution -- frozen, not just deferred.** No Lua VM is
-  embedded, and none is currently planned. `scorium-js` stays at
-  `scorium-spec` §7's "Core" scope until `scorium-go` gathers real
-  evidence (built Core-only, run against a real consumer) that Lua is
-  actually worth adding. If that evidence justifies it, the intent is
-  to ship it as an optional capability a consumer opts into, not a
-  dependency the base package always carries.
-- **Host-pluggable literal syntax.** Hosts can supply values and functions,
-  but cannot register new lexer token shapes.
-- **Generic iteration.** Only numeric `for` is specified.
-- **Additional escapes and nested comments.** These require a later language
-  version and matching conformance fixtures.
-
-### JS/TypeScript integration
-
-- async include loading or a host-provided file resolver;
-- browser-compatible parsing and formatting entry points that do not import
-  Node filesystem modules through the evaluator bundle;
-- richer generated API reference from exported declarations.
-
-### Tooling
-
-- an LSP for diagnostics, completion, hover, and navigation;
-- editor syntax packages;
-- source maps between formatted output and the original source.
+New syntax, generic iteration, nested comments, additional escapes, and Lua
+execution remain deferred until a real workflow requires them and the spec has
+matching cross-port fixtures.
 
 ## Non-goals
 
-Scorium is not intended to be:
-
-- a general-purpose JavaScript or Lua replacement;
-- a machine-interchange replacement for JSON;
-- a format tied to one application or operating system;
-- an API that silently ignores unsupported language constructs.
+Scorium is not a JavaScript or Lua replacement, a JSON interchange format, or
+an API that silently ignores unsupported constructs.
