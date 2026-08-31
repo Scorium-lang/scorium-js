@@ -19,6 +19,10 @@ export function parse(src: string, options: ParseOptions = {}): Document {
 const CMP_OPS: Partial<Record<TokenKind, BinOp>> = { eqeq: "eq", noteq: "noteq", lt: "lt", gt: "gt", lte: "lte", gte: "gte" };
 const ADD_OPS: Partial<Record<TokenKind, BinOp>> = { plus: "add", minus: "sub" };
 const MUL_OPS: Partial<Record<TokenKind, BinOp>> = { star: "mul", slash: "div", percent: "mod" };
+const RESERVED_WORDS = new Set<TokenKind>([
+  "bool", "nil", "and", "or", "not", "if", "then", "elseif", "else", "end",
+  "for", "do", "while", "local", "return", "fn", "include", "script",
+]);
 
 class Parser {
   private readonly tokens: Token[];
@@ -55,6 +59,15 @@ class Parser {
       this.fail(`scorium::parse::unexpected_token: expected ${kind}, found ${tok.kind} (${JSON.stringify(tok.text)}) at offset ${tok.pos}`, tok);
     }
     return this.advance();
+  }
+
+  private expectName(context: string): Token {
+    const tok = this.peek();
+    if (tok.kind === "ident") return this.advance();
+    if (RESERVED_WORDS.has(tok.kind)) {
+      this.fail(`scorium::parse::reserved_word: \`${tok.text}\` is a reserved word, not ${context}`, tok);
+    }
+    this.fail(`scorium::parse::unexpected_token: expected ${context}, found ${tok.kind} (${JSON.stringify(tok.text)}) at offset ${tok.pos}`, tok);
   }
 
   parseDocument(): Document {
@@ -133,7 +146,7 @@ class Parser {
     switch (this.peek().kind) {
       case "at": {
         this.advance();
-        const nameTok = this.expect("ident");
+        const nameTok = this.expectName("a variable name");
         this.expect("eq");
         const value = this.parseExpr();
         return { type: "vardef", name: nameTok.text, value };
@@ -146,7 +159,7 @@ class Parser {
         return this.parseWhile();
       case "local": {
         this.advance();
-        const nameTok = this.expect("ident");
+        const nameTok = this.expectName("a local name");
         this.expect("eq");
         const value = this.parseExpr();
         return { type: "local", name: nameTok.text, value };
@@ -171,7 +184,7 @@ class Parser {
       }
     }
 
-    const nameTok = this.expect("ident");
+    const nameTok = this.expectName("a key or node name");
     const next = this.peek();
 
     if (next.kind === "eq") {
@@ -217,7 +230,7 @@ class Parser {
 
   private parseFor(): Item {
     this.expect("for");
-    const varTok = this.expect("ident");
+    const varTok = this.expectName("a loop variable");
     this.expect("eq");
     const start = this.parseExpr();
     this.expect("comma");
@@ -244,14 +257,14 @@ class Parser {
 
   private parseFnDef(): Item {
     this.expect("fn");
-    const nameTok = this.expect("ident");
+    const nameTok = this.expectName("a function name");
     this.expect("lparen");
     const params: string[] = [];
     if (this.peek().kind !== "rparen") {
-      params.push(this.expect("ident").text);
+      params.push(this.expectName("a function parameter").text);
       while (this.peek().kind === "comma") {
         this.advance();
-        params.push(this.expect("ident").text);
+        params.push(this.expectName("a function parameter").text);
       }
     }
     this.expect("rparen");
@@ -377,7 +390,7 @@ class Parser {
     for (;;) {
       if (this.peek().kind === "dot") {
         this.advance();
-        const field = this.expect("ident").text;
+        const field = this.expectName("a member name").text;
         expr = { type: "member", base: expr, field };
         continue;
       }
