@@ -9,6 +9,8 @@ versions.
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-08-31
+
 ### Added
 
 - `check --json` diagnostics and a portable `parse --json` syntax tree matching
