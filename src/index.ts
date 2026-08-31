@@ -31,3 +31,5 @@ export type {
 } from "./schema.ts";
 export { SCORIUM_LANGUAGE_VERSION } from "./version.ts";
 export { portableAst } from "./portable.ts";
+export { load, loadSource } from "./load.ts";
+export type { LoadedScorium, LoadSourceOptions } from "./load.ts";
